@@ -2,22 +2,11 @@
 
 *A conversation with ChatGPT: how writers find a new leader after failover, how etcd's leader election works, and why fencing can only be as strong as the resource enforcing it.*
 
-## Contents
-
-1. [How writers learn the new leader address](#q1--how-writers-learn-the-new-leader-address)
-2. [Isn't a stable endpoint just kicking the can?](#q2--isnt-a-stable-endpoint-just-kicking-the-can)
-3. [The stable endpoint is itself the writer](#q3--the-stable-endpoint-is-itself-the-writer)
-4. [Can etcd help?](#q4--can-etcd-help)
-5. [How etcd leader election works](#q5--how-etcd-leader-election-works)
-6. [GC pauses and lease-based fencing](#q6--gc-pauses-and-lease-based-fencing)
-7. [Fencing tokens and the epoch-install barrier](#q7--fencing-tokens-and-the-epoch-install-barrier)
-
----
-
-## Q1 — How writers learn the new leader address
-
-> [!NOTE]
-> **Question:** Suppose I have a distributed system with replication (say, factor 3) with a leader shard and two followers. All the operations go through the leader. So the writing party needs to know leader's address. In case the leader changes (failover), its address changes too. What are the most common ways (used in practice) to let the writing parties know of this new address?
+<table style="margin: 32px 0 20px auto; max-width: 75%; border-collapse: separate; border: none;">
+<tr><td style="background: #1e3f73; color: #ffffff; border: none; border-radius: 20px; padding: 12px 18px; line-height: 1.5;">
+Suppose I have a distributed system with replication (say, factor 3) with a leader shard and two followers. All the operations go through the leader. So the writing party needs to know leader's address. In case the leader changes (failover), its address changes too. What are the most common ways (used in practice) to let the writing parties know of this new address?
+</td></tr>
+</table>
 
 In practice, systems usually solve this with one of a few patterns. A key observation is that clients often don't need to learn the leader's address proactively; they can discover it lazily when they try to write.
 
@@ -300,12 +289,11 @@ allowing the new leader to recognize duplicate requests.
 
 So the practical answer is: either hide leadership behind a stable endpoint, or let clients discover the leader from any replica and cache that information. For high-performance distributed storage, the latter—bootstrap nodes + metadata/redirect + cached leader mapping + epoch/term—is probably the most characteristic architecture.
 
----
-
-## Q2 — Isn't a stable endpoint just kicking the can?
-
-> [!NOTE]
-> **Question:** Above you wrote: "either hide leadership behind a stable endpoint" but that "stable endpoint" in its turn will need to know what the leader's address is. So it's just like kicking the can down the road.
+<table style="margin: 32px 0 20px auto; max-width: 75%; border-collapse: separate; border: none;">
+<tr><td style="background: #1e3f73; color: #ffffff; border: none; border-radius: 20px; padding: 12px 18px; line-height: 1.5;">
+Above you wrote: "either hide leadership behind a stable endpoint" but that "stable endpoint" in its turn will need to know what the leader's address is. So it's just like kicking the can down the road.
+</td></tr>
+</table>
 
 Exactly. A “stable endpoint” does not eliminate leader discovery; it centralizes it.
 
@@ -359,12 +347,11 @@ The important trick is that the bootstrap information changes much less frequent
 
 That's why systems often configure clients with multiple bootstrap nodes rather than a leader address. The bootstrap set is not authoritative and need not contain the leader—it just gives you an entry point into the cluster.
 
----
-
-## Q3 — The stable endpoint is itself the writer
-
-> [!NOTE]
-> **Question:** Yeah, but my initial question specifically wasn't about "clients", but rather a "writing party" - in this case being the "stable endpoint".
+<table style="margin: 32px 0 20px auto; max-width: 75%; border-collapse: separate; border: none;">
+<tr><td style="background: #1e3f73; color: #ffffff; border: none; border-radius: 20px; padding: 12px 18px; line-height: 1.5;">
+Yeah, but my initial question specifically wasn't about "clients", but rather a "writing party" - in this case being the "stable endpoint".
+</td></tr>
+</table>
 
 Right — in your terminology, the “stable endpoint” is itself a writing party, so it has exactly the same problem your original question asked about.
 
@@ -418,12 +405,11 @@ router now routes writes to C
 
 The key distinction I should have made earlier is that a stable endpoint solves **address stability for its callers**, not **leader discovery for itself**. For the stable endpoint, the canonical choices are still either discover on demand from the replicas or subscribe to authoritative leader metadata.
 
----
-
-## Q4 — Can etcd help?
-
-> [!NOTE]
-> **Question:** Can systems like etcd help here?
+<table style="margin: 32px 0 20px auto; max-width: 75%; border-collapse: separate; border: none;">
+<tr><td style="background: #1e3f73; color: #ffffff; border: none; border-radius: 20px; padding: 12px 18px; line-height: 1.5;">
+Can systems like etcd help here?
+</td></tr>
+</table>
 
 Yes. etcd is very well suited to exactly this coordination/discovery problem. It gives you a strongly consistent key-value store plus watches, leases, and election primitives.
 
@@ -651,12 +637,11 @@ The important caveat is:
 
 If the replica group already elects its leader, I'd generally let that protocol remain authoritative and use etcd to distribute the resulting shard → leader + term/epoch mapping.
 
----
-
-## Q5 — How etcd leader election works
-
-> [!NOTE]
-> **Question:** Let's talk a bit more about how etcd provides leader election. AFAIU, it's based on leases, right?
+<table style="margin: 32px 0 20px auto; max-width: 75%; border-collapse: separate; border: none;">
+<tr><td style="background: #1e3f73; color: #ffffff; border: none; border-radius: 20px; padding: 12px 18px; line-height: 1.5;">
+Let's talk a bit more about how etcd provides leader election. AFAIU, it's based on leases, right?
+</td></tr>
+</table>
 
 Yes—with an important distinction.
 
@@ -799,12 +784,11 @@ And that brings us directly back to your original replicated-writer problem: lea
 
 If you'd like, the interesting next step is to look at exactly what happens during a network partition and why a lease alone isn't sufficient to guarantee that two machines can never concurrently perform writes.
 
----
-
-## Q6 — GC pauses and lease-based fencing
-
-> [!NOTE]
-> **Question:** The mechanism you have described with fences still won't give you 100% guarantee from the split brain. Consider this: assume the Node A was just able to renew its lease and then hit an unusually long GC pause (say, 20 sec). So no heartbeats to etcd were issued. etcd considered it dead and the Node B has been promoted to the leader. In the meantime the old leader still can proceed with whatever operation (write) it was in the middle of right when it hit the GC pause. So the "fencing" technique you have described doesn't work reliably against preventing the split brain case.
+<table style="margin: 32px 0 20px auto; max-width: 75%; border-collapse: separate; border: none;">
+<tr><td style="background: #1e3f73; color: #ffffff; border: none; border-radius: 20px; padding: 12px 18px; line-height: 1.5;">
+The mechanism you have described with fences still won't give you 100% guarantee from the split brain. Consider this: assume the Node A was just able to renew its lease and then hit an unusually long GC pause (say, 20 sec). So no heartbeats to etcd were issued. etcd considered it dead and the Node B has been promoted to the leader. In the meantime the old leader still can proceed with whatever operation (write) it was in the middle of right when it hit the GC pause. So the "fencing" technique you have described doesn't work reliably against preventing the split brain case.
+</td></tr>
+</table>
 
 Correct. A lease by itself does not give you a 100% split-brain prevention guarantee in the scenario you described.
 
@@ -1011,12 +995,11 @@ So your objection is exactly right, with one refinement: the fencing technique i
 
 That's the part that makes fencing tokens materially different from leases.
 
----
-
-## Q7 — Fencing tokens and the epoch-install barrier
-
-> [!NOTE]
-> **Question:** You kinda twisted my words) Above I never said that I was expecting the lease alone to solve the split-brain, I was specifically saying the "fence token still doesn't give you 100% guarantee from split-brain". And here is what I mean: if the old leader with the old fence token was able to make its write before the new leader gets to do the same (using the new fence token), the target store (the resource) would allow it, as it wouldn't have yet seen that the new leader has been elected (and its new token wouldn't have ever hit the store yet at that point). So the split brain still would exist.
+<table style="margin: 32px 0 20px auto; max-width: 75%; border-collapse: separate; border: none;">
+<tr><td style="background: #1e3f73; color: #ffffff; border: none; border-radius: 20px; padding: 12px 18px; line-height: 1.5;">
+You kinda twisted my words) Above I never said that I was expecting the lease alone to solve the split-brain, I was specifically saying the "fence token still doesn't give you 100% guarantee from split-brain". And here is what I mean: if the old leader with the old fence token was able to make its write before the new leader gets to do the same (using the new fence token), the target store (the resource) would allow it, as it wouldn't have yet seen that the new leader has been elected (and its new token wouldn't have ever hit the store yet at that point). So the split brain still would exist.
+</td></tr>
+</table>
 
 Yes — that’s the more precise objection, and you're right.
 
