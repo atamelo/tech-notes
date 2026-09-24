@@ -14,8 +14,8 @@ Yes—at the machine-code level, putting `MFENCE` after every store, in every pa
 
 The reasoning is straightforward:
 
-- TSO already preserves Load→Load, Load→Store, and Store→Store ordering.
-- `MFENCE` between a store and subsequent loads enforces the missing Store→Load ordering.
+- TSO already preserves `Load→Load`, `Load→Store`, and `Store→Store` ordering.
+- `MFENCE` between a store and subsequent loads enforces the missing `Store→Load` ordering.
 - Consequently, all four kinds of program-order relationships are preserved. In the abstract store-buffer model, the fence drains the core’s store buffer before subsequent memory operations proceed. *Formal x86-TSO model*
 
 Indeed, this is a documented implementation of sequentially consistent atomic accesses on x86:
@@ -81,7 +81,7 @@ A concrete counterexample is this alternative implementation of SC accesses:
 | Write     | `MOV [x], value; return`            |
 | Read      | `MFENCE; MOV result, [x]; return`   |
 
-Placing the fence before each load, instead of after each store, also closes the Store→Load ordering gap and implements SC. This alternative is documented in the Cambridge x86 mappings.
+Placing the fence before each load, instead of after each store, also closes the `Store→Load` ordering gap and implements SC. This alternative is documented in the Cambridge x86 mappings.
 
 But consider `x = 0` initially:
 
