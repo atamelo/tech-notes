@@ -54,9 +54,18 @@ No headings, `---` separators or TOC for questions: they continue the conversati
 - Blank line before tables.
 - File starts with `# Title` and one italic line saying what the conversation covers.
 
+### Images from the chat
+
+- **Placement:** put each image where the chat rendered it. Find the anchor in the text: a lead-in that now leads nowhere ("Let me visualize…", "once you have this chain"), a glued progress message, or the paragraph the image's content illustrates. Insert right after the anchor, before the next paragraph or heading. If no anchor is clear, ask.
+- **Storage:** copy the file byte for byte into an `images/` folder next to the note, keeping its name, and reference it with a relative Markdown image. Take the alt text from the image's own title/description, or summarize what it shows. Don't embed SVG code or data URIs: GitHub strips both.
+- **Never modify the original.** Anything that has to change (colors, background, size) goes into a new copy with a suffix (`name_dark.svg`), and the note links to the copy. If a copy invalidates embedded provenance (a signed content credential), remove that block from the copy only.
+- **When asked, match the look the user saw.** Exported images can have a different theme baked in than the one displayed. Derive color changes from the source design system's documented light/dark mapping, not by eye, and map each color by its role (fill, border, title, subtitle, label, connector). Check the result against the user's screenshot by comparing rendered pixel colors.
+- **Verify the render:** the image loads, sits between the intended neighbors, displays at a sensible size, and every color in it maps (fail on any unmapped one instead of guessing).
+- **Report** which image files are new and untracked, so they get committed together with the note.
+
 ## Verifying a formatted transcript
 
-- Compare word sequences of the original (`git show HEAD:<file>`) and the result, ignoring whitespace, punctuation and added markup (fences, bubble HTML, `**`, backticks, `Q:`/`A:` prefixes). Content lines can also start with `A:` (e.g. `A: revision 4001`); strip the prefix only on an answer's first line.
+- Compare word sequences of the original (`git show HEAD:<file>`) and the result, ignoring whitespace, punctuation and added markup (fences, bubble HTML, `**`, backticks, `Q:`/`A:` prefixes, inserted image lines). Content lines can also start with `A:` (e.g. `A: revision 4001`); strip the prefix only on an answer's first line.
 - Report every difference. The only expected ones are the typo fixes and the long-dash swaps.
 - The number of fence lines must be even.
 - Preview the render locally (marked + github-markdown-css, served over http in the browser pane) before saying it looks right.
