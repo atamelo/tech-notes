@@ -10,11 +10,11 @@ Raw input: user turns start with `Q:`, assistant turns with `A:`. ASCII diagrams
 
 - Keep every word letter-for-letter. Change only whitespace/indentation and the markup around the text.
 - Fix obvious typos **only in the user's questions**. No rewording, added words, grammar, punctuation or capitalization fixes.
-- Never edit the assistant's text.
+- Never edit the assistant's text (except when explicitly asked by the user or when there is an explicit rule below requiring that).
 
 ### Character preferences
 
-- You should not allow (unless explicitly requested and/or required for some clear reason) the "long" dash ('—'). Prefer the "regular" dash ('-') instead.
+- You should not allow (unless explicitly requested and/or required for some clear reason) the "long" dash ('—'). Prefer the "regular" dash ('-') instead. Applies to all text, including the assistant's; an unspaced `a—b` becomes `a - b`.
 
 ### Questions → right-aligned chat bubble
 
@@ -50,7 +50,7 @@ No headings, `---` separators or TOC for questions: they continue the conversati
 ## Verifying a formatted transcript
 
 - Compare word sequences of the original (`git show HEAD:<file>`) and the result, ignoring whitespace, punctuation and added markup (fences, bubble HTML, `**`, backticks, `Q:`/`A:` prefixes). Content lines can also start with `A:` (e.g. `A: revision 4001`); strip the prefix only on an answer's first line.
-- Report every difference. The only expected ones are the typo fixes.
+- Report every difference. The only expected ones are the typo fixes and the long-dash swaps.
 - The number of fence lines must be even.
 - Preview the render locally (marked + github-markdown-css, served over http in the browser pane) before saying it looks right.
 
