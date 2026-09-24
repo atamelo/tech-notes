@@ -12,6 +12,10 @@ Raw input: user turns start with `Q:`, assistant turns with `A:`. ASCII diagrams
 - Fix obvious typos **only in the user's questions**. No rewording, added words, grammar, punctuation or capitalization fixes.
 - Never edit the assistant's text.
 
+### Character preferences
+
+- Try not to use (unless explicitly requested and/or required for some clear reason) the "long" dash ('—'). Prefer the "regular" dash ('-') instead.
+
 ### Questions → right-aligned chat bubble
 
 No headings, `---` separators or TOC for questions: they continue the conversation, they aren't sections.
