@@ -30,7 +30,7 @@ The most defensible anchor is the Avizienis–Laprie–Randell–Landwehr depend
 
 Almost all of the confusion dissolves once you have this chain, because each term intervenes at a different point on it.
 
-![Fault to error to failure to downtime chain: fault tolerance blocks the error from becoming a failure, resilience recovers from failure back to correct service, availability measures time spent in the failed states](images/fault_error_failure_chain_with_ft_resilience_availability.svg)
+![Fault to error to failure to downtime chain: fault tolerance blocks the error from becoming a failure, resilience recovers from failure back to correct service, availability measures time spent in the failed states](images/fault_error_failure_chain_with_ft_resilience_availability_dark.svg)
 
 ### The three definitions
 
@@ -100,7 +100,7 @@ A **failure model** specifies the observable behaviors a component can exhibit a
 
 Avizienis et al. make the recursion explicit: the failure of a component is a fault for the system that contains it. Same physical event, two names, depending on which side of the boundary you're standing on.
 
-![Fault and failure across nested system boundaries: a disk failure is a fault for the storage node; a node failure is a fault for the cluster](images/fault_failure_boundary_recursion_disk_node_cluster.svg)
+![Fault and failure across nested system boundaries: a disk failure is a fault for the storage node; a node failure is a fault for the cluster](images/fault_failure_boundary_recursion_disk_node_cluster_dark.svg)
 
 This is why "we tolerate up to `f < n/3` Byzantine nodes" is both. Byzantine is a failure model of a node (what a node can do at its interface) and simultaneously the fault model of the cluster (what the cluster assumes can go wrong inside it). Strictly, my phrasing earlier - calling Byzantine an enumerated fault model - was sloppy about which level I was speaking from.
 
