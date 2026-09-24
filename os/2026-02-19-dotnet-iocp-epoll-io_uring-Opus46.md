@@ -37,7 +37,7 @@ loop:
 
 This avoids the thread explosion, but:
 
-- **`select()` is O(n).** Every call copies the entire fd_set into the kernel and back, and the kernel scans every descriptor linearly.
+- **`select()` is O(n).** Every call copies the entire `fd_set` into the kernel and back, and the kernel scans every descriptor linearly.
 - **Single-threaded bottleneck.** You can only use one CPU core. Handling one request blocks all others. If a handler accidentally does something slow (a DNS lookup, a log write), everything stalls.
 - **No parallelism.** Modern machines have 8, 16, 64+ cores. A single-thread model wastes all but one.
 
@@ -138,7 +138,7 @@ The IOCP itself is a **kernel object** - an opaque handle created via `CreateIoC
 - **Completion Queue (FIFO).** Completed I/O packets land here. Each packet carries: the completion key, the bytes transferred, the `OVERLAPPED*`, and an error code.
 - **Waiting Thread Queue (LIFO).** Threads blocked in `GetQueuedCompletionStatus` are pushed here. LIFO order means the most-recently-blocked thread is woken first (cache-hot).
 - **Released Thread List.** Threads currently running (processing a completion). The kernel tracks how many there are.
-- **MaxConcurrency.** The maximum number of threads the IOCP will allow to run simultaneously. Typically set to the number of CPU cores. If a released thread blocks on something else (a mutex, a sleep, a synchronous I/O call), the kernel notices and releases another waiting thread to keep `MaxConcurrency` threads active.
+- **`MaxConcurrency`.** The maximum number of threads the IOCP will allow to run simultaneously. Typically set to the number of CPU cores. If a released thread blocks on something else (a mutex, a sleep, a synchronous I/O call), the kernel notices and releases another waiting thread to keep `MaxConcurrency` threads active.
 
 ### 2.3 Handle Association
 
@@ -191,7 +191,7 @@ DWORD WINAPI WorkerThread(LPVOID param) {
 }
 ```
 
-The recommended thread count is **2 × NumberOfProcessors** (Microsoft's guidance), with `MaxConcurrency` set to `NumberOfProcessors`. The extra threads exist so that if a worker temporarily blocks (e.g., acquiring a lock), the kernel can release a standby thread to keep all cores busy.
+The recommended thread count is **2 × `NumberOfProcessors`** (Microsoft's guidance), with `MaxConcurrency` set to `NumberOfProcessors`. The extra threads exist so that if a worker temporarily blocks (e.g., acquiring a lock), the kernel can release a standby thread to keep all cores busy.
 
 ---
 
@@ -252,7 +252,7 @@ This means: **you get automatic, adaptive parallelism with no user-mode coordina
 
 The LIFO ordering of the waiting thread queue is a deliberate performance optimization. If thread A just finished handling a completion and called `GetQueuedCompletionStatus` 1 microsecond ago, its stack, local variables, and cache lines are still hot. If a new completion arrives, waking thread A (the most recent) is cheaper than waking thread D (which blocked 500ms ago and whose cache lines have long been evicted). This alone can yield measurable throughput improvements at high load.
 
-### 3.4 Manual Completions via PostQueuedCompletionStatus
+### 3.4 Manual Completions via `PostQueuedCompletionStatus`
 
 You can inject _synthetic_ completion packets into the IOCP:
 
@@ -384,7 +384,7 @@ DWORD WINAPI WorkerThread(LPVOID param) {
 }
 ```
 
-### 4.5 AcceptEx for Scalable Accepts
+### 4.5 `AcceptEx` for Scalable Accepts
 
 Instead of blocking on `accept()`, you pre-post accept operations:
 
@@ -431,7 +431,7 @@ WaitForMultipleObjects(numWorkers, hThreads, TRUE, INFINITE);
 CloseHandle(hIOCP);
 ```
 
-### 4.7 GetQueuedCompletionStatusEx (Batched Dequeue)
+### 4.7 `GetQueuedCompletionStatusEx` (Batched Dequeue)
 
 Windows Vista+ added a batched version that dequeues multiple completions in a single syscall:
 
@@ -483,7 +483,7 @@ Main Thread
 - Completion Queue: empty
 - Waiting Queue: 8 threads (LIFO)
 - Released: 0
-- Pending I/O: 10 AcceptEx operations on the listener
+- Pending I/O: 10 `AcceptEx` operations on the listener
 
 ### Phase 2: Client Connects
 
@@ -622,12 +622,12 @@ Main Thread (receives shutdown signal):
 | Object                             | Created                | Destroyed                               | Owned By              |
 | ---------------------------------- | ---------------------- | --------------------------------------- | --------------------- |
 | IOCP handle                        | Process start          | Shutdown                                | Main thread           |
-| Worker threads                     | Process start          | Shutdown (via SHUTDOWN_KEY)             | Main thread           |
+| Worker threads                     | Process start          | Shutdown (via `SHUTDOWN_KEY`)             | Main thread           |
 | Listen socket                      | Process start          | Shutdown                                | Main thread           |
-| PER_SOCKET_CONTEXT                 | AcceptEx completes     | Client disconnects or error             | Worker thread         |
-| Pre-accept socket                  | AcceptEx posted        | Becomes client socket on accept         | Transitions ownership |
-| PER_IO_CONTEXT                     | Before each async I/O  | After completion processed, or on error | Worker thread         |
-| OVERLAPPED (inside PER_IO_CONTEXT) | Zeroed before each I/O | With its parent PER_IO_CONTEXT          | Worker thread         |
+| `PER_SOCKET_CONTEXT`                 | `AcceptEx` completes     | Client disconnects or error             | Worker thread         |
+| Pre-accept socket                  | `AcceptEx` posted        | Becomes client socket on accept         | Transitions ownership |
+| `PER_IO_CONTEXT`                     | Before each async I/O  | After completion processed, or on error | Worker thread         |
+| OVERLAPPED (inside `PER_IO_CONTEXT`) | Zeroed before each I/O | With its parent `PER_IO_CONTEXT`          | Worker thread         |
 
 ---
 
@@ -726,7 +726,7 @@ DWORD CompletionPortThreadStart(LPVOID lpArgs) {
 
 The `DispatchManagedCallback` step is where the native OVERLAPPED pointer is resolved back to a managed `NativeOverlapped*`, which in turn points to a managed `IOCompletionCallback` delegate. More on this below.
 
-### 6.4 Binding Handles: ThreadPoolBoundHandle
+### 6.4 Binding Handles: `ThreadPoolBoundHandle`
 
 The bridge between a Win32 handle and the CLR's global IOCP is `ThreadPoolBoundHandle` (in `System.Threading`):
 
@@ -750,7 +750,7 @@ public static ThreadPoolBoundHandle BindHandle(SafeHandle handle) {
 
 This is the same `CreateIoCompletionPort` "associate" call from the Win32 world. After this call, any overlapped I/O on that handle will deliver completions to the CLR's global IOCP. The handle is now "bound."
 
-**Every .NET type that does async I/O calls BindHandle during construction:**
+**Every .NET type that does async I/O calls `BindHandle` during construction:**
 
 - `FileStream` (when `useAsync: true` or `isAsync: true`) binds its file handle
 - `Socket` binds its socket handle the first time you call an async operation
@@ -800,7 +800,7 @@ The lifecycle is:
 
 **Critical detail:** The `NativeOverlapped` must be allocated via `ThreadPoolBoundHandle.AllocateNativeOverlapped` - not via `Overlapped.Pack` directly if you want IOCP dispatch. The bound handle ensures the CLR routes the completion correctly.
 
-### 6.6 Inside Socket.ReceiveAsync - End-to-End
+### 6.6 Inside `Socket.ReceiveAsync` - End-to-End
 
 Let's trace what happens when you call `await socket.ReceiveAsync(buffer)` on Windows:
 
@@ -1061,7 +1061,7 @@ The .NET `FileStream(path, options)` with `options.IsAsync = true` (or the old `
 
 3. **Binding is explicit.** Handles must be associated via `ThreadPoolBoundHandle.BindHandle`. The framework types (`FileStream`, `Socket`, etc.) do this automatically, but only when opened in async/overlapped mode.
 
-4. **NativeOverlapped is the bridge.** It extends the Win32 `OVERLAPPED` with managed back-pointers, enabling the CLR to route a raw kernel completion to a managed delegate.
+4. **`NativeOverlapped` is the bridge.** It extends the Win32 `OVERLAPPED` with managed back-pointers, enabling the CLR to route a raw kernel completion to a managed delegate.
 
 5. **I/O threads do minimal work.** The callback on the I/O thread should be cheap - set a result, schedule a continuation. Heavy work belongs on the worker pool.
 
@@ -1127,11 +1127,11 @@ for (int i = 0; i < n; i++) {
 Key properties relevant to .NET:
 
 - **O(1) for wait** - `epoll_wait` returns only the _ready_ fds, not all registered ones.
-- **Edge-triggered mode (EPOLLET)** - notifies only on state _transitions_ (not-ready → ready), not on continuous readiness. More efficient but requires draining the fd completely on each notification.
+- **Edge-triggered mode (`EPOLLET`)** - notifies only on state _transitions_ (not-ready → ready), not on continuous readiness. More efficient but requires draining the fd completely on each notification.
 - **`data.ptr`** - each registration carries a user pointer, which .NET uses to store a back-reference to the managed socket context.
 - **Scales to millions of fds** - same O(1) characteristics as IOCP.
 
-### 7.3 The .NET Linux Architecture: SocketAsyncEngine
+### 7.3 The .NET Linux Architecture: `SocketAsyncEngine`
 
 On Linux, the equivalent of the Windows IOCP plumbing lives in `SocketAsyncEngine` (in `System.Net.Sockets`). The architecture:
 
@@ -1182,7 +1182,7 @@ Key differences from the Windows architecture:
 | Aspect                        | Windows                                 | Linux                                                                        |
 | ----------------------------- | --------------------------------------- | ---------------------------------------------------------------------------- |
 | Notification model            | Completion (data already in buffer)     | Readiness (fd is ready, you must read)                                       |
-| Kernel object                 | 1 IOCP per process                      | 1+ epoll instances (SocketAsyncEngine)                                       |
+| Kernel object                 | 1 IOCP per process                      | 1+ epoll instances (`SocketAsyncEngine`)                                       |
 | Dedicated threads             | I/O completion threads (GQCS loop)      | epoll threads (epoll_wait loop)                                              |
 | Where the actual read happens | Kernel (before completion)              | Worker thread (after readiness notification)                                 |
 | Buffer pinning during I/O     | Required (kernel writes to your buffer) | Not required (you read into buffer when ready)                               |
@@ -1386,4 +1386,4 @@ The elegance of .NET's design is that all of this is invisible to application co
 3. **Keep buffers alive.** The buffer pointed to by `WSABUF` must not be freed or moved until the completion arrives.
 4. **Handle the `ok == FALSE && pOv != NULL` case.** This means the I/O completed with an error (e.g., connection reset). You still have a valid `pOv` and must clean up.
 5. **Handle the `ok == FALSE && pOv == NULL` case.** This means `GQCS` itself failed (e.g., timeout). There's no I/O context to process.
-6. **Always replenish AcceptEx.** After each accept completes, post a new one so the pool doesn't drain.
+6. **Always replenish `AcceptEx`.** After each accept completes, post a new one so the pool doesn't drain.

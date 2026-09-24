@@ -209,11 +209,11 @@ It's worth reading in full. The problems it was solving were with the old schedu
 
 1. **Over-subscription and cache thrashing.** If you run more OS threads than physical cores, the OS scheduler starts context-switching between them. Each switch potentially evicts the CPU cache state (L1/L2) of the previous thread. Go's whole point with P is that each P maintains a local run queue, and goroutines preferentially enqueue locally to avoid lock contention and improve cache locality. *Goperf*
 
-   That locality argument collapses if you let M count float above core count - the per-P caches (mcache, GC work buffers) stop being "warm" on a real core. Fixed GOMAXPROCS = fixed number of Ps = each P tends to live on one physical core = warm caches.
+   That locality argument collapses if you let M count float above core count - the per-P caches (`mcache`, GC work buffers) stop being "warm" on a real core. Fixed GOMAXPROCS = fixed number of Ps = each P tends to live on one physical core = warm caches.
 
-2. **The mcache cost.** In the old scheduler, every M held an mcache (the per-thread memory allocation pool) of up to 2MB. If the number of idle Ms became too large it could cause significant performance loss due to excessive resource consumption and poor data locality. *Columbia University*
+2. **The `mcache` cost.** In the old scheduler, every M held an `mcache` (the per-thread memory allocation pool) of up to 2MB. If the number of idle Ms became too large it could cause significant performance loss due to excessive resource consumption and poor data locality. *Columbia University*
 
-   By moving mcache to P, you have exactly GOMAXPROCS of them - bounded, predictable, always in use.
+   By moving `mcache` to P, you have exactly GOMAXPROCS of them - bounded, predictable, always in use.
 
 3. **Mutex contention on the run queue.** The old scheduler had excessive reliance on the global Sched lock - in order to modify the queues of Ms and Gs, or any other global Sched field, this single lock had to be held, creating problems for high throughput servers and parallel computational programs. *Columbia University*
 

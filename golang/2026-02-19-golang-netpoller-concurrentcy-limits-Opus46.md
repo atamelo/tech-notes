@@ -91,7 +91,7 @@ The source code is definitive on this. `netpoll()` is a function, not a goroutin
 
 1. **sysmon** (the background monitoring thread) - calls `netpoll(0)` (non-blocking) periodically when it notices no poll has happened recently. You can see the pattern: it checks `sched.lastpoll`, and if enough time has passed, does a non-blocking poll and injects any ready goroutines via `injectglist`. But sysmon is a general-purpose watchdog - it also handles timer checks, goroutine preemption, forced GC, etc. It's not a netpoller event loop.
 
-2. **findrunnable** (any idle M looking for work) - this is actually the primary consumer. The scheduling order from the Gerrit code review lays it out explicitly:
+2. **`findrunnable`** (any idle M looking for work) - this is actually the primary consumer. The scheduling order from the Gerrit code review lays it out explicitly:
 
 ```text
 6.4 non-blocking netpoll(0) if netpollWaiters > 0 and no other M polling.
@@ -101,11 +101,11 @@ The source code is definitive on this. `netpoll()` is a function, not a goroutin
 
 So when an M has exhausted all other options (local queue, global queue, work stealing), it can block in `netpoll(delay)` - but only one M at a time can do this, coordinated by `sched.pollingNet`.
 
-3. **startTheWorldWithSema** - does a non-blocking `netpoll(0)` when resuming after a stop-the-world pause (like GC).
+3. **`startTheWorldWithSema`** - does a non-blocking `netpoll(0)` when resuming after a stop-the-world pause (like GC).
 
 ### The key coordination mechanism
 
-The `sched.pollingNet` atomic variable acts as a mutex ensuring at most one M is blocked in netpoll at any time. This is the line you can see in `proc.go`:
+The `sched.pollingNet` atomic variable acts as a mutex ensuring at most one M is blocked in `netpoll` at any time. This is the line you can see in `proc.go`:
 
 ```go
 if netpollinited() && netpollAnyWaiters() && sched.lastpoll.Load() != 0 && sched.pollingNet.Swap(1) == 0 {
@@ -133,20 +133,20 @@ If there's at least one idle M - which is typical in I/O-heavy workloads - that 
 
 ### When it falls apart
 
-The bad case is when all Ps are saturated with CPU-bound work and no M is idle. Then nobody is calling netpoll, and the only backstop is sysmon. And sysmon has a progressive backoff - it starts at 20μs but backs off up to 10ms between iterations. So yes, in the worst case, an I/O-ready fd sits unnoticed for up to 10ms. That's your unbounded (well, 10ms-bounded) latency.
+The bad case is when all Ps are saturated with CPU-bound work and no M is idle. Then nobody is calling `netpoll`, and the only backstop is sysmon. And sysmon has a progressive backoff - it starts at 20μs but backs off up to 10ms between iterations. So yes, in the worst case, an I/O-ready fd sits unnoticed for up to 10ms. That's your unbounded (well, 10ms-bounded) latency.
 
 A dedicated poller thread wouldn't have this problem - it would be blocked in `epoll_wait` at all times, waking within microseconds of any fd becoming ready, regardless of how busy the rest of the process is.
 
 ### The Go team knows this
 
-The gVisor issue (#29734) I found earlier is exactly about this. The gVisor team replaced the runtime netpoller with dedicated per-fd polling threads and measured TCP round-trip latency dropping from ~182μs to ~112μs. Their workload involved rapid goroutine blocking/unblocking where findrunnable overhead (including the scheduling dance around who gets to call netpoll) added measurable latency. In the discussion, Dmitry Vyukov (the scheduler's author) acknowledged the gap but argued it should be fixable within the existing design rather than requiring a dedicated thread.
+The gVisor issue (#29734) I found earlier is exactly about this. The gVisor team replaced the runtime netpoller with dedicated per-fd polling threads and measured TCP round-trip latency dropping from ~182μs to ~112μs. Their workload involved rapid goroutine blocking/unblocking where `findrunnable` overhead (including the scheduling dance around who gets to call `netpoll`) added measurable latency. In the discussion, Dmitry Vyukov (the scheduler's author) acknowledged the gap but argued it should be fixable within the existing design rather than requiring a dedicated thread.
 
 ### Why they still chose this design
 
 The tradeoff is deliberate. A dedicated poller thread means:
 
 - One OS thread permanently consumed even when there's zero network I/O
-- When it wakes goroutines, those goroutines still need to be scheduled onto an M/P - so you add a cross-thread handoff that the opportunistic model avoids (in findrunnable, the M that calls netpoll can immediately run the woken goroutine itself, zero handoff)
+- When it wakes goroutines, those goroutines still need to be scheduled onto an M/P - so you add a cross-thread handoff that the opportunistic model avoids (in `findrunnable`, the M that calls `netpoll` can immediately run the woken goroutine itself, zero handoff)
 - More contention on run queues from the dedicated thread injecting goroutines
 
 For the vast majority of Go programs (web servers, microservices, API backends), there are always idle Ms, so the opportunistic model gives near-optimal latency and avoids the dedicated thread overhead. The 10ms worst case only materializes under heavy CPU saturation with no idle Ms - and at that point, the program is already bottlenecked on compute, so a few ms of I/O notification delay is arguably not the primary concern.
@@ -159,11 +159,11 @@ That said, you're right that for latency-sensitive systems where microsecond-lev
 </td></tr>
 </table>
 
-Sure. Let me walk through the full findrunnable path for an M that has run out of work, step by step.
+Sure. Let me walk through the full `findrunnable` path for an M that has run out of work, step by step.
 
 ### Setup: an M runs out of goroutines
 
-Say M3 is attached to P2 and has just finished executing a goroutine. It calls `schedule()`, which calls `findrunnable()` to get the next goroutine to run. Here's what happens inside findrunnable:
+Say M3 is attached to P2 and has just finished executing a goroutine. It calls `schedule()`, which calls `findrunnable()` to get the next goroutine to run. Here's what happens inside `findrunnable`:
 
 **Steps 1–5:** Check local run queue → check global run queue → non-blocking `netpoll(0)` → try to steal from other Ps' local queues. All come back empty.
 
@@ -171,7 +171,7 @@ Say M3 is attached to P2 and has just finished executing a goroutine. It calls `
 
 **Step 7 (recheck):** One more pass over all queues to avoid a race where work arrived between earlier checks. Still nothing.
 
-**Step 8 (the critical moment):** M3 has exhausted every option. Now the key question: is any other M already blocked in netpoll?
+**Step 8 (the critical moment):** M3 has exhausted every option. Now the key question: is any other M already blocked in `netpoll`?
 
 It checks `sched.pollingNet`. If no one else is polling:
 
@@ -192,9 +192,9 @@ An fd becomes ready. The kernel wakes M3 from `epoll_wait`. M3 now has a `gList`
 
 ### Why "at least one idle M" matters so much
 
-If all Ms are busy running CPU-bound goroutines on their Ps, then nobody ever enters findrunnable, nobody reaches step 6.8, and nobody is sitting in `epoll_wait`. The only thing checking for I/O readiness is sysmon's periodic non-blocking `netpoll(0)`, with its 20μs → 10ms backoff.
+If all Ms are busy running CPU-bound goroutines on their Ps, then nobody ever enters `findrunnable`, nobody reaches step 6.8, and nobody is sitting in `epoll_wait`. The only thing checking for I/O readiness is sysmon's periodic non-blocking `netpoll(0)`, with its 20μs → 10ms backoff.
 
-But in a typical I/O-heavy server (say, handling HTTP requests), goroutines are constantly parking on network reads and waking up. This means Ms frequently cycle through findrunnable, and at any given moment it's very likely that at least one M has found no work and has settled into the blocking `netpoll(delay)` call. So you get microsecond-level I/O notification almost for free, without dedicating a thread to it.
+But in a typical I/O-heavy server (say, handling HTTP requests), goroutines are constantly parking on network reads and waking up. This means Ms frequently cycle through `findrunnable`, and at any given moment it's very likely that at least one M has found no work and has settled into the blocking `netpoll(delay)` call. So you get microsecond-level I/O notification almost for free, without dedicating a thread to it.
 
 The design essentially says: "the thread that would otherwise be sleeping anyway might as well be our epoll waiter." It's elegant, but as you correctly identified, it has no guarantee - it's "usually someone is there" rather than "someone is always there."
 
@@ -226,7 +226,7 @@ When a goroutine returns from a blocking syscall (the synchronous kind where the
 
 ### 5. Netpoll result injection
 
-When netpoll returns a batch of ready goroutines (from any of its call sites - findrunnable, sysmon, startTheWorldWithSema), they're handed to `injectglist`. This function tries to distribute goroutines to idle Ps' local queues first, but any remainder goes to the GRQ via `globrunqputbatch`. In the common case where sysmon finds 50 ready goroutines but only 2 Ps are idle, the extra 48 end up on the GRQ.
+When `netpoll` returns a batch of ready goroutines (from any of its call sites - `findrunnable`, sysmon, `startTheWorldWithSema`), they're handed to `injectglist`. This function tries to distribute goroutines to idle Ps' local queues first, but any remainder goes to the GRQ via `globrunqputbatch`. In the common case where sysmon finds 50 ready goroutines but only 2 Ps are idle, the extra 48 end up on the GRQ.
 
 ### 6. GC-related transitions
 
@@ -245,6 +245,6 @@ if schedtick%61 == 0 {
 }
 ```
 
-So every 61st scheduling tick, a P pulls from the GRQ instead of the LRQ. And of course during work stealing, if an idle P finds nothing in other Ps' LRQs, it checks the GRQ too (findrunnable step 6.3).
+So every 61st scheduling tick, a P pulls from the GRQ instead of the LRQ. And of course during work stealing, if an idle P finds nothing in other Ps' LRQs, it checks the GRQ too (`findrunnable` step 6.3).
 
 The 1/61 ratio is a tuned heuristic - high enough to prevent GRQ starvation, low enough to preserve locality (goroutines on the LRQ tend to have warm caches for that P's M/core).

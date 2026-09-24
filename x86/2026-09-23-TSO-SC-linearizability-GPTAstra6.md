@@ -6,7 +6,7 @@
 <tr><td style="background: #1e3f73; color: #ffffff; border: none; border-radius: 20px; padding: 12px 18px; line-height: 1.5;">
 <strong style="font-size: 1.4em;">Q:</strong>&nbsp; X86 memory model is known to be pretty strong - TSO. It's technically "one step" away from sequential consistency.
 <br><br>
-Do I get it right, that to get sequential consistency on x86 for memory operations, one just needs to issue MFENCE after each memory store?
+Do I get it right, that to get sequential consistency on x86 for memory operations, one just needs to issue <code>MFENCE</code> after each memory store?
 </td></tr>
 </table>
 
@@ -35,7 +35,7 @@ Two scope qualifications: a fence does not make a tearing access atomic; and thi
 <tr><td style="background: #1e3f73; color: #ffffff; border: none; border-radius: 20px; padding: 12px 18px; line-height: 1.5;">
 <strong style="font-size: 1.4em;">Q:</strong>&nbsp; And how do I go "one step" above SC and get linearizability for operations on individual memory locations?
 <br><br>
-My intuition tells me that this could technically  be done by having an MFENCE after <em>every</em> memory operation - load and store.
+My intuition tells me that this could technically  be done by having an <code>MFENCE</code> after <em>every</em> memory operation - load and store.
 <br><br>
 Do I get it right?
 </td></tr>

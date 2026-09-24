@@ -1,6 +1,6 @@
 # Acquire/Release, x86 TSO, Out-of-Order Execution & ILP (Claude Opus 4.6)
 
-*A conversation with Claude Opus 4.6: acquire/release semantics and when you need seq_cst, what x86 TSO allows and why, the store buffer, and how in-order retirement, the ROB and the MOB produce each ordering guarantee - all in service of instruction-level parallelism.*
+*A conversation with Claude Opus 4.6: acquire/release semantics and when you need `seq_cst`, what x86 TSO allows and why, the store buffer, and how in-order retirement, the ROB and the MOB produce each ordering guarantee - all in service of instruction-level parallelism.*
 
 <table style="margin: 32px 0 20px auto; max-width: 75%; border-collapse: separate; border: none;">
 <tr><td style="background: #1e3f73; color: #ffffff; border: none; border-radius: 20px; padding: 12px 18px; line-height: 1.5;">
@@ -118,7 +118,7 @@ Thread 4: r3 = y.load(acquire)   // sees 1
           r4 = x.load(acquire)   // sees 0
 ```
 
-Under acquire/release, this outcome (r1=1, r2=0, r3=1, r4=0) is permitted. Thread 3 sees x updated before y; thread 4 sees y updated before x. There is no single total order they agree on. Under sequential consistency this is forbidden - all threads must observe one global ordering of all seq_cst operations.
+Under acquire/release, this outcome (`r1=1, r2=0, r3=1, r4=0`) is permitted. Thread 3 sees x updated before y; thread 4 sees y updated before x. There is no single total order they agree on. Under sequential consistency this is forbidden - all threads must observe one global ordering of all `seq_cst` operations.
 
 ### 2. Real-World Cases Requiring Sequential Consistency
 
@@ -133,7 +133,7 @@ if (!flag2.load(???))          if (!flag1.load(???))
     enter_critical_section();      enter_critical_section();
 ```
 
-With acquire/release, both threads can enter the critical section. Thread 1's release store of flag1 only guarantees ordering with a future acquire load that reads that store. But Thread 1's load of flag2 has no happens-before relationship with Thread 2's store of flag2 - they're independent. Each thread can see its own flag set and the other's flag still clear. You need seq_cst here (or an explicit `store→load` fence, which is what seq_cst stores emit on most architectures) to ensure that the store is globally visible before the load executes.
+With acquire/release, both threads can enter the critical section. Thread 1's release store of flag1 only guarantees ordering with a future acquire load that reads that store. But Thread 1's load of flag2 has no happens-before relationship with Thread 2's store of flag2 - they're independent. Each thread can see its own flag set and the other's flag still clear. You need `seq_cst` here (or an explicit `store→load` fence, which is what `seq_cst` stores emit on most architectures) to ensure that the store is globally visible before the load executes.
 
 This generalizes to any "write my intent, then check your intent" pattern - it appears in many lock-free algorithms, barrier implementations, and try-lock protocols.
 
@@ -151,13 +151,13 @@ if (stop.load(seq_cst))
     // bail out and decrement
 ```
 
-With mere acquire/release, a worker could read `stop == false` while the coordinator reads `workers_active == 0`, and both proceed - the very race you wanted to prevent. The seq_cst ordering ensures the store and load to different variables can't pass each other across threads.
+With mere acquire/release, a worker could read `stop == false` while the coordinator reads `workers_active == 0`, and both proceed - the very race you wanted to prevent. The `seq_cst` ordering ensures the store and load to different variables can't pass each other across threads.
 
-**Seqlocks (reader side).** Seqlocks use a sequence counter that writers increment (odd = write in progress, even = stable). Readers read the counter, read the data, then re-read the counter and retry if it changed. The reader's initial load of the counter and subsequent loads of protected data touch different locations and must not be reordered in a way that defeats the protocol. In practice most implementations use seq_cst or explicit full fences for the counter reads to prevent subtle reorderings that acquire alone wouldn't rule out on weaker hardware.
+**Seqlocks (reader side).** Seqlocks use a sequence counter that writers increment (odd = write in progress, even = stable). Readers read the counter, read the data, then re-read the counter and retry if it changed. The reader's initial load of the counter and subsequent loads of protected data touch different locations and must not be reordered in a way that defeats the protocol. In practice most implementations use `seq_cst` or explicit full fences for the counter reads to prevent subtle reorderings that acquire alone wouldn't rule out on weaker hardware.
 
-**The practical takeaway:** you need seq_cst (or a full fence) specifically when your correctness argument depends on `store→load` ordering across different variables between different threads - that is, "my store to X must be visible to your load of X before I load Y, and your store to Y must be visible to my load of Y before you load X." Acquire/release gives you `store→store` and `load→load` ordering relative to the synchronization variable, but not the `store→load` ordering to a different variable that Dekker-like patterns demand.
+**The practical takeaway:** you need `seq_cst` (or a full fence) specifically when your correctness argument depends on `store→load` ordering across different variables between different threads - that is, "my store to X must be visible to your load of X before I load Y, and your store to Y must be visible to my load of Y before you load X." Acquire/release gives you `store→store` and `load→load` ordering relative to the synchronization variable, but not the `store→load` ordering to a different variable that Dekker-like patterns demand.
 
-In practice, most concurrent code is built on locks (which internally use seq_cst or fences) or on single-location producer-consumer patterns (where acquire/release suffices). The cases where a programmer directly needs seq_cst in application-level code are relatively rare, but when they arise, getting it wrong produces bugs that only manifest on weakly-ordered hardware (ARM, POWER) and are extremely difficult to reproduce.
+In practice, most concurrent code is built on locks (which internally use `seq_cst` or fences) or on single-location producer-consumer patterns (where acquire/release suffices). The cases where a programmer directly needs `seq_cst` in application-level code are relatively rare, but when they arise, getting it wrong produces bugs that only manifest on weakly-ordered hardware (ARM, POWER) and are extremely difficult to reproduce.
 
 <table style="margin: 32px 0 20px auto; max-width: 75%; border-collapse: separate; border: none;">
 <tr><td style="background: #1e3f73; color: #ffffff; border: none; border-radius: 20px; padding: 12px 18px; line-height: 1.5;">
@@ -179,7 +179,7 @@ Every plain `MOV` store on x86 is effectively a release store: all prior loads a
 
 ### 2. Yes - `store→load` reordering is the one reordering x86 permits
 
-TSO forbids `load→load` reordering, `store→store` reordering, and `load→store` reordering. But it explicitly allows a younger load to execute before an older store to a different address completes (becomes globally visible). This is precisely why x86 gives you acquire/release for free but does not give you sequential consistency for free. To get seq_cst, you need an `MFENCE` instruction (or a `LOCK`-prefixed operation, which has the same fencing effect) to prevent this one remaining reordering.
+TSO forbids `load→load` reordering, `store→store` reordering, and `load→store` reordering. But it explicitly allows a younger load to execute before an older store to a different address completes (becomes globally visible). This is precisely why x86 gives you acquire/release for free but does not give you sequential consistency for free. To get `seq_cst`, you need an `MFENCE` instruction (or a `LOCK`-prefixed operation, which has the same fencing effect) to prevent this one remaining reordering.
 
 This is why Dekker's algorithm breaks on x86 without a fence. Each thread stores to its own flag and then loads the other's flag - that's exactly the `store→load` pattern TSO is allowed to reorder.
 
@@ -195,23 +195,23 @@ So the precise story is: the store buffer is a per-core queue of committed-but-n
 
 An `MFENCE` (or a `LOCK`ed instruction) forces the store buffer to drain completely before any subsequent load can execute. That's why it eliminates the `store→load` reordering - by the time the load of the other thread's flag runs, this thread's own store has exited the store buffer and entered the coherent cache, where the other core will also see it via the coherence protocol.
 
-This is also why seq_cst stores on x86 are more expensive than plain stores - they typically compile to either `MOV` + `MFENCE` or `XCHG` (which has an implicit lock prefix), both of which force a store buffer drain, stalling the pipeline until the store is globally visible.
+This is also why `seq_cst` stores on x86 are more expensive than plain stores - they typically compile to either `MOV` + `MFENCE` or `XCHG` (which has an implicit lock prefix), both of which force a store buffer drain, stalling the pipeline until the store is globally visible.
 
 <table style="margin: 32px 0 20px auto; max-width: 75%; border-collapse: separate; border: none;">
 <tr><td style="background: #1e3f73; color: #ffffff; border: none; border-radius: 20px; padding: 12px 18px; line-height: 1.5;">
-<strong style="font-size: 1.4em;">Q:</strong>&nbsp; 1. Does the store buffer work on individual address level or on the whole cache line level - i.e. does it consider two variables having two different addresses but share the same cache line as different? 2. is there any real world difference in what to use for a fence - MFENCE or XCHG? 3. Do I get it right that on x86 <code>store -> load</code> reorderings are essentially allowed because of the presence of the store buffer - meaning that the stores are propagated with a delay? And the loads to a different address can be executed in parallel so as not to slow the program down unnecessarily?
+<strong style="font-size: 1.4em;">Q:</strong>&nbsp; 1. Does the store buffer work on individual address level or on the whole cache line level - i.e. does it consider two variables having two different addresses but share the same cache line as different? 2. is there any real world difference in what to use for a fence - <code>MFENCE</code> or <code>XCHG</code>? 3. Do I get it right that on x86 <code>store -> load</code> reorderings are essentially allowed because of the presence of the store buffer - meaning that the stores are propagated with a delay? And the loads to a different address can be executed in parallel so as not to slow the program down unnecessarily?
 </td></tr>
 </table>
 
 ### 1. Store Buffer Operates at Address (Byte) Granularity
 
-The store buffer tracks individual stores with their exact addresses and sizes, not cache lines. If you write a single byte, the store buffer entry records that specific address and that one byte of data. Store-to-load forwarding matches on address and checks whether the buffered store fully covers the load - if thread 1 stored to address 0x1000 (where flag1 lives) and then loads from 0x1008 (where flag2 lives on the same cache line), the store buffer lookup finds no match and the load goes to L1 cache. The two variables being on the same cache line makes no difference to the store buffer logic.
+The store buffer tracks individual stores with their exact addresses and sizes, not cache lines. If you write a single byte, the store buffer entry records that specific address and that one byte of data. Store-to-load forwarding matches on address and checks whether the buffered store fully covers the load - if thread 1 stored to address `0x1000` (where flag1 lives) and then loads from `0x1008` (where flag2 lives on the same cache line), the store buffer lookup finds no match and the load goes to L1 cache. The two variables being on the same cache line makes no difference to the store buffer logic.
 
 That said, cache line granularity does matter at a different level - the coherence protocol (MESI) operates on cache lines. So when the store finally drains from the store buffer, it writes into L1 at cache-line granularity, and that's the point at which it becomes visible to other cores. But the store buffer itself is finer-grained.
 
 One subtlety worth knowing: if a store buffer entry only partially covers a load (say you stored a byte and then load a dword at the same address), the core may need to merge the buffered byte with the remaining bytes from L1 cache. The exact behavior here is microarchitecture-dependent and has historically been a source of surprising performance penalties.
 
-### 2. MFENCE vs LOCK XCHG - Yes, There Are Real Differences
+### 2. `MFENCE` vs `LOCK XCHG` - Yes, There Are Real Differences
 
 Functionally they both provide a full fence. But in practice:
 
@@ -219,7 +219,7 @@ Functionally they both provide a full fence. But in practice:
 
 There was also a correctness issue: on certain older Intel processors, `MFENCE` didn't properly fence non-temporal (streaming) stores in all cases, while `LOCK`-prefixed instructions did. This was documented in errata. For this reason, the Linux kernel and many production runtimes prefer `LOCK`-prefixed instructions for fencing.
 
-This is why most compilers implement seq_cst stores as `XCHG` rather than `MOV` + `MFENCE`. If you look at what GCC and Clang emit for `std::atomic::store(val, seq_cst)`, you'll typically see `XCHG` on modern compiler versions. It's both faster and more historically reliable.
+This is why most compilers implement `seq_cst` stores as `XCHG` rather than `MOV` + `MFENCE`. If you look at what GCC and Clang emit for `std::atomic::store(val, seq_cst)`, you'll typically see `XCHG` on modern compiler versions. It's both faster and more historically reliable.
 
 ### 3. Yes - That's Exactly Right
 
@@ -390,7 +390,7 @@ add R1, R2    ; fast, 1 cycle, no dependency on the load
 load [B]      ; fast, cache hit, 4 cycles
 ```
 
-An out-of-order core can execute the add and load [B] while still waiting for load [A] to come back from memory. This is critical for performance.
+An out-of-order core can execute the add and `load [B]` while still waiting for `load [A]` to come back from memory. This is critical for performance.
 
 ### The Problem: Precise Exceptions
 

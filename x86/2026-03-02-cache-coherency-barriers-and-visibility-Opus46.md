@@ -100,7 +100,7 @@ data = 42;             if (flag == 1)
 flag = 1;                  read data;   // expect 42
 ```
 
-Without a barrier, x86's TSO actually handles this particular case correctly - stores are committed in program order, so if Thread 2 sees `flag == 1`, the store to data was already globally visible. No fence needed between the two stores (store-store order is guaranteed by TSO).
+Without a barrier, x86's TSO actually handles this particular case correctly - stores are committed in program order, so if Thread 2 sees `flag == 1`, the store to data was already globally visible. No fence needed between the two stores (`store→store` order is guaranteed by TSO).
 
 But now consider this variation:
 
@@ -112,17 +112,17 @@ read B;                read A;
 
 Can both threads read 0? On x86, yes - without a fence. Each core's store is sitting in its local store buffer when the subsequent load executes. The load sneaks ahead of the store becoming globally visible. This is the one reordering x86 permits: a younger load can be satisfied before an older store drains. An `MFENCE` between the store and load on each core prevents this by forcing the store to drain before the load executes.
 
-This is exactly why `seq_cst` stores on x86 compile to `MOV` + `MFENCE` (or `XCHG` with its implicit lock), while release stores compile to a plain `MOV` - TSO already provides release semantics for free, but sequential consistency requires preventing store-load reordering, which requires a real hardware fence.
+This is exactly why `seq_cst` stores on x86 compile to `MOV` + `MFENCE` (or `XCHG` with its implicit lock), while release stores compile to a plain `MOV` - TSO already provides release semantics for free, but sequential consistency requires preventing `store→load` reordering, which requires a real hardware fence.
 
 ### Revised Picture
 
 | What barriers do               | Compiler level | Hardware level                                                               |
 | ------------------------------ | -------------- | ---------------------------------------------------------------------------- |
-| Prevent reordering of accesses | ✅ Yes         | ✅ Yes (specifically store-load reordering on x86)                           |
+| Prevent reordering of accesses | ✅ Yes         | ✅ Yes (specifically `store→load` reordering on x86)                           |
 | Prevent caching in registers   | ✅ Yes         | N/A                                                                          |
 | Force store buffer drain       | N/A            | ✅ Yes (`MFENCE`, `LOCK`-prefixed instructions)                              |
 | "Speed up" visibility          | No             | No - they stall the core until the drain completes, they don't accelerate it |
 
 ### Coming Back to Your Original Scenario
 
-For your specific case (one writer, one reader, single variable), the hardware effect of a barrier is less critical - TSO and MESI already ensure the reader will see updates, and store-load reordering across a single variable isn't the problem. The dominant risk is still the compiler optimizing away the re-reads. But you're absolutely right that in the general multi-variable case, barriers serve a real and essential hardware purpose beyond just disciplining the compiler. I shouldn't have reduced them to a compiler-only concern.
+For your specific case (one writer, one reader, single variable), the hardware effect of a barrier is less critical - TSO and MESI already ensure the reader will see updates, and `store→load` reordering across a single variable isn't the problem. The dominant risk is still the compiler optimizing away the re-reads. But you're absolutely right that in the general multi-variable case, barriers serve a real and essential hardware purpose beyond just disciplining the compiler. I shouldn't have reduced them to a compiler-only concern.
