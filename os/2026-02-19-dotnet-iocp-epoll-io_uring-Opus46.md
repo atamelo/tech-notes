@@ -301,7 +301,7 @@ CreateIoCompletionPort(
     (HANDLE)ctx->socket,
     hIOCP,
     (ULONG_PTR)ctx,   // completion key = pointer to context
-    0                  // ignored
+    0                 // ignored
 );
 ```
 
@@ -409,7 +409,7 @@ lpfnAcceptEx(
     listenSocket,
     acceptSocket,
     ioCtx->buffer,                     // receives addresses + optional first data
-    0,                                  // 0 = don't wait for data, just accept
+    0,                                 // 0 = don't wait for data, just accept
     sizeof(SOCKADDR_IN) + 16,
     sizeof(SOCKADDR_IN) + 16,
     &dwBytes,
@@ -656,31 +656,31 @@ This single IOCP serves as the convergence point for **all** asynchronous I/O ac
 The .NET `ThreadPool` is actually **two distinct pools** behind a single API surface:
 
 ```
-┌─────────────────────────────────────────────────────────────┐
-│                    .NET ThreadPool                           │
-│                                                             │
-│  ┌──────────────────────┐    ┌────────────────────────────┐ │
-│  │   Worker Thread Pool  │    │   I/O Completion Pool      │ │
-│  │                       │    │                            │ │
-│  │  Driven by:           │    │  Driven by:                │ │
-│  │  - Global work queue  │    │  - The single IOCP         │ │
-│  │  - Local work queues  │    │  - GetQueuedCompletion-    │ │
-│  │  - Work stealing      │    │    Status() loop           │ │
-│  │                       │    │                            │ │
-│  │  Threads do:          │    │  Threads do:               │ │
-│  │  - Task.Run callbacks │    │  - Receive OS completions  │ │
-│  │  - QueueUserWorkItem  │    │  - Invoke IOCompletion-    │ │
-│  │  - async continuations│    │    Callback                │ │
-│  │  - Timer callbacks    │    │  - Typically hand off to   │ │
-│  │                       │    │    worker pool              │ │
-│  │  Sizing: Hill Climbing│    │  Sizing: demand-driven,    │ │
-│  │  algorithm            │    │  simpler heuristic         │ │
-│  └──────────────────────┘    └────────────────────────────┘ │
-│                                                             │
-│  ThreadPool.SetMinThreads(workerMin, ioMin)                 │
-│  ThreadPool.SetMaxThreads(workerMax, ioMax)                 │
-│  ThreadPool.GetAvailableThreads(out workers, out io)        │
-└─────────────────────────────────────────────────────────────┘
+┌───────────────────────────────────────────────────────────────┐
+│                    .NET ThreadPool                            │
+│                                                               │
+│  ┌────────────────────────┐    ┌────────────────────────────┐ │
+│  │   Worker Thread Pool   │    │   I/O Completion Pool      │ │
+│  │                        │    │                            │ │
+│  │  Driven by:            │    │  Driven by:                │ │
+│  │  - Global work queue   │    │  - The single IOCP         │ │
+│  │  - Local work queues   │    │  - GetQueuedCompletion-    │ │
+│  │  - Work stealing       │    │    Status() loop           │ │
+│  │                        │    │                            │ │
+│  │  Threads do:           │    │  Threads do:               │ │
+│  │  - Task.Run callbacks  │    │  - Receive OS completions  │ │
+│  │  - QueueUserWorkItem   │    │  - Invoke IOCompletion-    │ │
+│  │  - async continuations │    │    Callback                │ │
+│  │  - Timer callbacks     │    │  - Typically hand off to   │ │
+│  │                        │    │    worker pool             │ │
+│  │  Sizing: Hill Climbing │    │  Sizing: demand-driven,    │ │
+│  │  algorithm             │    │  simpler heuristic         │ │
+│  └────────────────────────┘    └────────────────────────────┘ │
+│                                                               │
+│  ThreadPool.SetMinThreads(workerMin, ioMin)                   │
+│  ThreadPool.SetMaxThreads(workerMax, ioMax)                   │
+│  ThreadPool.GetAvailableThreads(out workers, out io)          │
+└───────────────────────────────────────────────────────────────┘
 ```
 
 The **worker threads** handle `Task.Run`, `QueueUserWorkItem`, `async/await` continuations (the code _after_ the `await`), and timer callbacks. Their sizing is managed by a sophisticated hill-climbing algorithm that experiments with adding/removing threads to maximize throughput.
@@ -764,7 +764,7 @@ If you create a `FileStream` with `useAsync: false`, the handle is **not** bound
 Win32 IOCP deals in raw `OVERLAPPED*` pointers. Managed code deals in objects, delegates, and the garbage collector. The CLR provides a layer to bridge these:
 
 ```
-┌─────────────────────────────────────────────────────┐
+┌──────────────────────────────────────────────────────┐
 │  Managed World                                       │
 │                                                      │
 │  PreAllocatedOverlapped                              │
@@ -776,16 +776,16 @@ Win32 IOCP deals in raw `OVERLAPPED*` pointers. Managed code deals in objects, d
 │  NativeOverlapped*  (allocated from pinned buffer)   │
 │    ┌──────────────────────────┐                      │
 │    │ OVERLAPPED fields        │ ◄── what the OS sees │
-│    │ (Internal, InternalHigh, │                       │
-│    │  Offset, hEvent)         │                       │
-│    ├──────────────────────────┤                       │
-│    │ CLR bookkeeping:         │                       │
-│    │  → back-pointer to       │                       │
-│    │    managed Overlapped    │                       │
-│    │  → GC handle to state    │                       │
-│    │  → callback pointer      │                       │
-│    └──────────────────────────┘                       │
-└─────────────────────────────────────────────────────┘
+│    │ (Internal, InternalHigh, │                      │
+│    │  Offset, hEvent)         │                      │
+│    ├──────────────────────────┤                      │
+│    │ CLR bookkeeping:         │                      │
+│    │  → back-pointer to       │                      │
+│    │    managed Overlapped    │                      │
+│    │  → GC handle to state    │                      │
+│    │  → callback pointer      │                      │
+│    └──────────────────────────┘                      │
+└──────────────────────────────────────────────────────┘
 ```
 
 The lifecycle is:
@@ -834,7 +834,7 @@ await socket.ReceiveAsync(buf)
     │   machine suspends at await.
     │
     │                                                    ┌──────────────┐
-    │   ═══ time passes, data arrives on NIC ═══        │ NIC → DMA →  │
+    │   ═══ time passes, data arrives on NIC ═══         │ NIC → DMA →  │
     │                                                    │ kernel buffer│
     │                                                    │ → user buffer│
     │                                                    │ (the pinned  │
@@ -1012,43 +1012,43 @@ The .NET `FileStream(path, options)` with `options.IsAsync = true` (or the old `
 ┌─────────────────────────────────────────────────────────────────────────┐
 │                          .NET Process                                   │
 │                                                                         │
-│  ┌───────────────┐ ┌───────────────┐ ┌───────────────┐                 │
-│  │  FileStream    │ │  Socket       │ │ NamedPipe     │  ... etc        │
-│  │  (async=true)  │ │               │ │               │                 │
-│  └──────┬────────┘ └──────┬────────┘ └──────┬────────┘                 │
-│         │                  │                  │                          │
-│         └──────────┬───────┴──────────┬───────┘                         │
-│                    ▼                  ▼                                  │
+│  ┌────────────────┐ ┌────────────────┐ ┌────────────────┐               │
+│  │  FileStream    │ │  Socket        │ │ NamedPipe      │  ... etc      │
+│  │  (async=true)  │ │                │ │                │               │
+│  └──────┬─────────┘ └──────┬─────────┘ └──────┬─────────┘               │
+│         │                  │                  │                         │
+│         └─────────┬────────┴────────┬─────────┘                         │
+│                   ▼                 ▼                                   │
 │         ThreadPoolBoundHandle.BindHandle()                              │
 │            = CreateIoCompletionPort(handle, g_hIOCP, ...)               │
-│                    │                                                    │
-│                    ▼                                                    │
-│  ┌──────────────────────────────────────────────────────────────┐      │
-│  │           Single Process-Wide IOCP (kernel object)           │      │
-│  │                                                              │      │
-│  │  ┌──────────────────────┐   ┌─────────────────────────────┐ │      │
-│  │  │  Completion Queue    │   │  I/O Completion Threads     │ │      │
-│  │  │  (all completions    │──►│  Thread IO-1: GQCS loop     │ │      │
-│  │  │   from all handles)  │   │  Thread IO-2: GQCS loop     │ │      │
-│  │  └──────────────────────┘   │  Thread IO-3: GQCS loop     │ │      │
-│  │                              │  (count: 1..~1000,          │ │      │
-│  │                              │   grows/shrinks on demand)  │ │      │
-│  │                              └──────────────┬──────────────┘ │      │
-│  └──────────────────────────────────────────────┼───────────────┘      │
-│                                                 │                       │
-│                    IOCompletionCallback fires    │                       │
-│                    on I/O thread. Minimal work:  │                       │
-│                    set result, schedule          │                       │
-│                    continuation.                 │                       │
-│                                                 ▼                       │
-│  ┌──────────────────────────────────────────────────────────────┐      │
-│  │                Worker Thread Pool                            │      │
-│  │                                                              │      │
-│  │  Thread W-1  Thread W-2  Thread W-3  ...  Thread W-N        │      │
-│  │                                                              │      │
-│  │  Processes: Task.Run, async continuations, QueueUserWorkItem │      │
-│  │  Sizing: Hill Climbing algorithm                             │      │
-│  └──────────────────────────────────────────────────────────────┘      │
+│                   │                                                     │
+│                   ▼                                                     │
+│  ┌──────────────────────────────────────────────────────────────┐       │
+│  │           Single Process-Wide IOCP (kernel object)           │       │
+│  │                                                              │       │
+│  │  ┌──────────────────────┐   ┌─────────────────────────────┐  │       │
+│  │  │  Completion Queue    │   │  I/O Completion Threads     │  │       │
+│  │  │  (all completions    │──►│  Thread IO-1: GQCS loop     │  │       │
+│  │  │   from all handles)  │   │  Thread IO-2: GQCS loop     │  │       │
+│  │  └──────────────────────┘   │  Thread IO-3: GQCS loop     │  │       │
+│  │                             │  (count: 1..~1000,          │  │       │
+│  │                             │   grows/shrinks on demand)  │  │       │
+│  │                             └──────────────┬──────────────┘  │       │
+│  └────────────────────────────────────────────┼─────────────────┘       │
+│                                               │                         │
+│                IOCompletionCallback fires     │                         │
+│                on I/O thread. Minimal work:   │                         │
+│                set result, schedule           │                         │
+│                continuation.                  │                         │
+│                                               ▼                         │
+│  ┌──────────────────────────────────────────────────────────────┐       │
+│  │                Worker Thread Pool                            │       │
+│  │                                                              │       │
+│  │  Thread W-1  Thread W-2  Thread W-3  ...  Thread W-N         │       │
+│  │                                                              │       │
+│  │  Processes: Task.Run, async continuations, QueueUserWorkItem │       │
+│  │  Sizing: Hill Climbing algorithm                             │       │
+│  └──────────────────────────────────────────────────────────────┘       │
 │                                                                         │
 └─────────────────────────────────────────────────────────────────────────┘
 ```
@@ -1139,41 +1139,41 @@ On Linux, the equivalent of the Windows IOCP plumbing lives in `SocketAsyncEngin
 ┌───────────────────────────────────────────────────────────────────┐
 │                       .NET Process on Linux                       │
 │                                                                   │
-│  ┌──────────┐  ┌──────────┐  ┌──────────┐                       │
+│  ┌───────────┐  ┌───────────┐  ┌───────────┐                      │
 │  │ Socket A  │  │ Socket B  │  │ Socket C  │  ... thousands       │
 │  │ (async)   │  │ (async)   │  │ (async)   │                      │
-│  └─────┬─────┘  └─────┬─────┘  └─────┬─────┘                    │
-│        │               │               │                          │
-│        └───────┬───────┴───────┬───────┘                         │
-│                ▼               ▼                                   │
-│  ┌─────────────────────────────────────────────────┐             │
-│  │        SocketAsyncEngine(s)                      │             │
-│  │                                                  │             │
-│  │  ┌─────────────────────────────────────────┐    │             │
-│  │  │  epoll instance(s)                       │    │             │
-│  │  │  (1 per engine, typically 1-N engines    │    │             │
-│  │  │   where N ≈ processor count, capped)     │    │             │
-│  │  └──────────────┬──────────────────────────┘    │             │
-│  │                 │                                │             │
-│  │  ┌──────────────▼──────────────────────────┐    │             │
-│  │  │  Dedicated epoll thread (per engine)     │    │             │
-│  │  │  while (true) {                          │    │             │
-│  │  │    n = epoll_wait(epfd, events, ...);    │    │             │
-│  │  │    for each ready event:                 │    │             │
-│  │  │      queue callback to ThreadPool        │    │             │
-│  │  │  }                                       │    │             │
-│  │  └──────────────────────────────────────────┘    │             │
-│  └─────────────────────────────────────────────────┘             │
-│                    │                                              │
-│                    ▼  schedules work items                        │
-│  ┌─────────────────────────────────────────────────────────┐     │
-│  │              Worker Thread Pool                          │     │
-│  │  Thread W-1  Thread W-2  ...  Thread W-N                │     │
-│  │                                                          │     │
-│  │  1. Performs the ACTUAL non-blocking read()/write()      │     │
-│  │  2. Completes the ValueTask/Task                         │     │
-│  │  3. Runs the async continuation                          │     │
-│  └─────────────────────────────────────────────────────────┘     │
+│  └─────┬─────┘  └─────┬─────┘  └─────┬─────┘                      │
+│        │              │              │                            │
+│        └───────┬──────┴───────┬──────┘                            │
+│                ▼              ▼                                   │
+│  ┌─────────────────────────────────────────────────┐              │
+│  │        SocketAsyncEngine(s)                     │              │
+│  │                                                 │              │
+│  │  ┌─────────────────────────────────────────┐    │              │
+│  │  │  epoll instance(s)                      │    │              │
+│  │  │  (1 per engine, typically 1-N engines   │    │              │
+│  │  │   where N ≈ processor count, capped)    │    │              │
+│  │  └──────────────┬──────────────────────────┘    │              │
+│  │                 │                               │              │
+│  │  ┌──────────────▼──────────────────────────┐    │              │
+│  │  │  Dedicated epoll thread (per engine)    │    │              │
+│  │  │  while (true) {                         │    │              │
+│  │  │    n = epoll_wait(epfd, events, ...);   │    │              │
+│  │  │    for each ready event:                │    │              │
+│  │  │      queue callback to ThreadPool       │    │              │
+│  │  │  }                                      │    │              │
+│  │  └─────────────────────────────────────────┘    │              │
+│  └─────────────────────────────────────────────────┘              │
+│                   │                                               │
+│                   ▼  schedules work items                         │
+│  ┌─────────────────────────────────────────────────────────┐      │
+│  │              Worker Thread Pool                         │      │
+│  │  Thread W-1  Thread W-2  ...  Thread W-N                │      │
+│  │                                                         │      │
+│  │  1. Performs the ACTUAL non-blocking read()/write()     │      │
+│  │  2. Completes the ValueTask/Task                        │      │
+│  │  3. Runs the async continuation                         │      │
+│  └─────────────────────────────────────────────────────────┘      │
 └───────────────────────────────────────────────────────────────────┘
 ```
 
@@ -1293,19 +1293,19 @@ Unlike regular files, pipes and Unix domain sockets **do** work with epoll. They
 `io_uring`, introduced in Linux 5.1 (2019), finally brings a **completion-based** model to Linux — conceptually similar to IOCP:
 
 ```
-┌──────────────────────────────────────────────────┐
-│                   io_uring                        │
-│                                                   │
-│  Submission Queue (SQ)         Completion Queue   │
-│  ┌────────────────────┐       (CQ)                │
-│  │ [SQE] [SQE] [SQE]  │       ┌────────────────┐ │
-│  │  read   write  ..   │       │ [CQE] [CQE]    │ │
-│  └────────────────────┘       └────────────────┘ │
-│                                                   │
-│  User-space and kernel share these ring buffers   │
-│  via mmap — submissions and completions can       │
-│  happen WITHOUT syscalls (io_uring_enter optional)│
-└──────────────────────────────────────────────────┘
+┌────────────────────────────────────────────────────┐
+│                   io_uring                         │
+│                                                    │
+│  Submission Queue (SQ)         Completion Queue    │
+│  ┌────────────────────┐       (CQ)                 │
+│  │ [SQE] [SQE] [SQE]  │       ┌────────────────┐   │
+│  │  read   write  ..  │       │ [CQE] [CQE]    │   │
+│  └────────────────────┘       └────────────────┘   │
+│                                                    │
+│  User-space and kernel share these ring buffers    │
+│  via mmap — submissions and completions can        │
+│  happen WITHOUT syscalls (io_uring_enter optional) │
+└────────────────────────────────────────────────────┘
 ```
 
 Properties:
@@ -1346,32 +1346,32 @@ await socket.ReceiveAsync(buf)
 │                  │       Windows           │         Linux              │
 ├──────────────────┼─────────────────────────┼────────────────────────────┤
 │ Network async    │ Overlapped I/O + IOCP   │ Non-blocking + epoll       │
-│ mechanism        │ (completion-based)       │ (readiness-based)          │
-│                  │                          │ or io_uring (completion)   │
+│ mechanism        │ (completion-based)      │ (readiness-based)          │
+│                  │                         │ or io_uring (completion)   │
 ├──────────────────┼─────────────────────────┼────────────────────────────┤
 │ File async       │ Overlapped I/O + IOCP   │ Thread pool fake-async     │
-│ mechanism        │ (true async)             │ (blocking pread on worker) │
-│                  │                          │ or io_uring (true async)   │
+│ mechanism        │ (true async)            │ (blocking pread on worker) │
+│                  │                         │ or io_uring (true async)   │
 ├──────────────────┼─────────────────────────┼────────────────────────────┤
-│ Event loop       │ I/O completion threads   │ epoll threads              │
-│ threads          │ calling GQCS             │ calling epoll_wait         │
+│ Event loop       │ I/O completion threads  │ epoll threads              │
+│ threads          │ calling GQCS            │ calling epoll_wait         │
 ├──────────────────┼─────────────────────────┼────────────────────────────┤
-│ Who reads data   │ Kernel (before           │ Worker thread (after       │
-│ from socket      │ completion fires)        │ readiness notification)    │
-│                  │                          │ or kernel (with io_uring)  │
+│ Who reads data   │ Kernel (before          │ Worker thread (after       │
+│ from socket      │ completion fires)       │ readiness notification)    │
+│                  │                         │ or kernel (with io_uring)  │
 ├──────────────────┼─────────────────────────┼────────────────────────────┤
-│ Buffer pinning   │ Required during I/O      │ Not needed (epoll)         │
-│                  │ (GC can't move buffer)   │ Required (io_uring)        │
+│ Buffer pinning   │ Required during I/O     │ Not needed (epoll)         │
+│                  │ (GC can't move buffer)  │ Required (io_uring)        │
 ├──────────────────┼─────────────────────────┼────────────────────────────┤
-│ Optimistic       │ Not typical — post       │ Yes — try read() first,    │
-│ synchronous path │ overlapped, wait for     │ only register with epoll   │
-│                  │ completion               │ if EAGAIN                  │
+│ Optimistic       │ Not typical — post      │ Yes — try read() first,    │
+│ synchronous path │ overlapped, wait for    │ only register with epoll   │
+│                  │ completion              │ if EAGAIN                  │
 ├──────────────────┼─────────────────────────┼────────────────────────────┤
-│ Pipe/Unix socket │ N/A (named pipes use     │ epoll (same as TCP)        │
-│                  │ overlapped I/O + IOCP)   │                            │
-├──────────────────┼─────────────────────────┼────────────────────────────┤
-│ .NET API surface │           Identical: async/await, Task/ValueTask      │
-│ to user code     │           Same code runs on both platforms            │
+│ Pipe/Unix socket │ N/A (named pipes use    │ epoll (same as TCP)        │
+│                  │ overlapped I/O + IOCP)  │                            │
+├──────────────────┼─────────────────────────┴────────────────────────────┤
+│ .NET API surface │           Identical: async/await, Task/ValueTask     │
+│ to user code     │           Same code runs on both platforms           │
 └──────────────────┴──────────────────────────────────────────────────────┘
 ```
 
@@ -1379,8 +1379,9 @@ The elegance of .NET's design is that all of this is invisible to application co
 
 ---
 
-### Key Invariants to Maintain Each outstanding I/O operation needs its own OVERLAPPED. Reusing one causes undefined behavior and data corruption.
+### Key Invariants to Maintain
 
+1. **Each outstanding I/O operation needs its own OVERLAPPED.** Reusing one causes undefined behavior and data corruption.
 2. **Always zero the OVERLAPPED before reuse.** The `Internal` and `InternalHigh` fields are written by the kernel.
 3. **Keep buffers alive.** The buffer pointed to by `WSABUF` must not be freed or moved until the completion arrives.
 4. **Handle the `ok == FALSE && pOv != NULL` case.** This means the I/O completed with an error (e.g., connection reset). You still have a valid `pOv` and must clean up.
