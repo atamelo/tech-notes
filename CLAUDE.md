@@ -62,6 +62,7 @@ No headings, `---` separators or TOC for questions: they continue the conversati
 - **When asked, match the look the user saw.** Exported images can have a different theme baked in than the one displayed. Derive color changes from the source design system's documented light/dark mapping, not by eye, and map each color by its role (fill, border, title, subtitle, label, connector). Check the result against the user's screenshot by comparing rendered pixel colors.
 - **Verify the render:** the image loads, sits between the intended neighbors, displays at a sensible size, and every color in it maps (fail on any unmapped one instead of guessing).
 - **Report** which image files are new and untracked, so they get committed together with the note.
+- **Flag missing images:** if the text has an anchor for an image (or the narrative otherwise suggests that there should be an image) but none was attached (or there are more anchors than images, or an attached image matches no anchor), tell the user where each gap is and ask them to attach it. Don't insert a placeholder or invent the image.
 
 ## Verifying a formatted transcript
 
