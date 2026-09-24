@@ -133,7 +133,7 @@ if (!flag2.load(???))          if (!flag1.load(???))
     enter_critical_section();      enter_critical_section();
 ```
 
-With acquire/release, both threads can enter the critical section. Thread 1's release store of flag1 only guarantees ordering with a future acquire load that reads that store. But Thread 1's load of flag2 has no happens-before relationship with Thread 2's store of flag2 — they're independent. Each thread can see its own flag set and the other's flag still clear. You need seq_cst here (or an explicit store-load fence, which is what seq_cst stores emit on most architectures) to ensure that the store is globally visible before the load executes.
+With acquire/release, both threads can enter the critical section. Thread 1's release store of flag1 only guarantees ordering with a future acquire load that reads that store. But Thread 1's load of flag2 has no happens-before relationship with Thread 2's store of flag2 — they're independent. Each thread can see its own flag set and the other's flag still clear. You need seq_cst here (or an explicit `store→load` fence, which is what seq_cst stores emit on most architectures) to ensure that the store is globally visible before the load executes.
 
 This generalizes to any "write my intent, then check your intent" pattern — it appears in many lock-free algorithms, barrier implementations, and try-lock protocols.
 
@@ -155,7 +155,7 @@ With mere acquire/release, a worker could read `stop == false` while the coordin
 
 **Seqlocks (reader side).** Seqlocks use a sequence counter that writers increment (odd = write in progress, even = stable). Readers read the counter, read the data, then re-read the counter and retry if it changed. The reader's initial load of the counter and subsequent loads of protected data touch different locations and must not be reordered in a way that defeats the protocol. In practice most implementations use seq_cst or explicit full fences for the counter reads to prevent subtle reorderings that acquire alone wouldn't rule out on weaker hardware.
 
-**The practical takeaway:** you need seq_cst (or a full fence) specifically when your correctness argument depends on store-load ordering across different variables between different threads — that is, "my store to X must be visible to your load of X before I load Y, and your store to Y must be visible to my load of Y before you load X." Acquire/release gives you store-store and load-load ordering relative to the synchronization variable, but not the store→load ordering to a different variable that Dekker-like patterns demand.
+**The practical takeaway:** you need seq_cst (or a full fence) specifically when your correctness argument depends on `store→load` ordering across different variables between different threads — that is, "my store to X must be visible to your load of X before I load Y, and your store to Y must be visible to my load of Y before you load X." Acquire/release gives you `store→store` and `load→load` ordering relative to the synchronization variable, but not the `store→load` ordering to a different variable that Dekker-like patterns demand.
 
 In practice, most concurrent code is built on locks (which internally use seq_cst or fences) or on single-location producer-consumer patterns (where acquire/release suffices). The cases where a programmer directly needs seq_cst in application-level code are relatively rare, but when they arise, getting it wrong produces bugs that only manifest on weakly-ordered hardware (ARM, POWER) and are extremely difficult to reproduce.
 
@@ -177,11 +177,11 @@ Great questions. They get at the heart of x86 TSO.
 
 Every plain `MOV` store on x86 is effectively a release store: all prior loads and stores in program order are visible before the store becomes visible to other cores. Every plain `MOV` load is effectively an acquire load: all subsequent loads and stores in program order happen after the load. The compiler still needs to emit a compiler barrier (prevent its own reorderings), but no special hardware instructions are needed for acquire/release semantics on x86.
 
-### 2. Yes — store→load reordering is the one reordering x86 permits
+### 2. Yes — `store→load` reordering is the one reordering x86 permits
 
-TSO forbids load→load reordering, store→store reordering, and load→store reordering. But it explicitly allows a younger load to execute before an older store to a different address completes (becomes globally visible). This is precisely why x86 gives you acquire/release for free but does not give you sequential consistency for free. To get seq_cst, you need an `MFENCE` instruction (or a `LOCK`-prefixed operation, which has the same fencing effect) to prevent this one remaining reordering.
+TSO forbids `load→load` reordering, `store→store` reordering, and `load→store` reordering. But it explicitly allows a younger load to execute before an older store to a different address completes (becomes globally visible). This is precisely why x86 gives you acquire/release for free but does not give you sequential consistency for free. To get seq_cst, you need an `MFENCE` instruction (or a `LOCK`-prefixed operation, which has the same fencing effect) to prevent this one remaining reordering.
 
-This is why Dekker's algorithm breaks on x86 without a fence. Each thread stores to its own flag and then loads the other's flag — that's exactly the store→load pattern TSO is allowed to reorder.
+This is why Dekker's algorithm breaks on x86 without a fence. Each thread stores to its own flag and then loads the other's flag — that's exactly the `store→load` pattern TSO is allowed to reorder.
 
 ### 3. Almost — but one important correction about the mechanism
 
@@ -193,13 +193,13 @@ Thread 1 executes `flag1 = 1`. This write enters Thread 1's store buffer, where 
 
 So the precise story is: the store buffer is a per-core queue of committed-but-not-yet-globally-visible stores. A core can see its own buffered stores (via forwarding), but no other core can see them until they drain to L1. The load "bypasses" the store buffer for addresses that aren't in it, going straight to the coherent cache, which doesn't yet reflect the other core's pending writes.
 
-An `MFENCE` (or a `LOCK`ed instruction) forces the store buffer to drain completely before any subsequent load can execute. That's why it eliminates the store→load reordering — by the time the load of the other thread's flag runs, this thread's own store has exited the store buffer and entered the coherent cache, where the other core will also see it via the coherence protocol.
+An `MFENCE` (or a `LOCK`ed instruction) forces the store buffer to drain completely before any subsequent load can execute. That's why it eliminates the `store→load` reordering — by the time the load of the other thread's flag runs, this thread's own store has exited the store buffer and entered the coherent cache, where the other core will also see it via the coherence protocol.
 
 This is also why seq_cst stores on x86 are more expensive than plain stores — they typically compile to either `MOV` + `MFENCE` or `XCHG` (which has an implicit lock prefix), both of which force a store buffer drain, stalling the pipeline until the store is globally visible.
 
 <table style="margin: 32px 0 20px auto; max-width: 75%; border-collapse: separate; border: none;">
 <tr><td style="background: #1e3f73; color: #ffffff; border: none; border-radius: 20px; padding: 12px 18px; line-height: 1.5;">
-<strong style="font-size: 1.4em;">Q:</strong>&nbsp; 1. Does the store buffer work on individual address level or on the whole cache line level - i.e. does it consider two variables having two different addresses but share the same cache line as different? 2. is there any real world difference in what to use for a fence - MFENCE or XCHG? 3. Do I get it right that on x86 store -> load reorderings are essentially allowed because of the presence of the store buffer - meaning that the stores are propagated with a delay? And the loads to a different address can be executed in parallel so as not to slow the program down unnecessarily?
+<strong style="font-size: 1.4em;">Q:</strong>&nbsp; 1. Does the store buffer work on individual address level or on the whole cache line level - i.e. does it consider two variables having two different addresses but share the same cache line as different? 2. is there any real world difference in what to use for a fence - MFENCE or XCHG? 3. Do I get it right that on x86 <code>store -> load</code> reorderings are essentially allowed because of the presence of the store buffer - meaning that the stores are propagated with a delay? And the loads to a different address can be executed in parallel so as not to slow the program down unnecessarily?
 </td></tr>
 </table>
 
@@ -223,17 +223,17 @@ This is why most compilers implement seq_cst stores as `XCHG` rather than `MOV` 
 
 ### 3. Yes — That's Exactly Right
 
-The store buffer is the microarchitectural mechanism that creates the store→load reordering, and the reason it exists is precisely the performance motivation you described.
+The store buffer is the microarchitectural mechanism that creates the `store→load` reordering, and the reason it exists is precisely the performance motivation you described.
 
 Stores are slow to commit — the core has to get exclusive ownership of the cache line (MESI E or M state), which may require sending invalidation messages to other cores and waiting for acknowledgments. If the core stalled on every store waiting for this to complete, performance would suffer enormously. The store buffer decouples execution from the cache coherence protocol: the core writes into the store buffer and moves on immediately, letting the store drain to cache asynchronously in the background.
 
-Now once you have that buffer, loads to different addresses have no reason to wait. The data the load wants is sitting right there in L1 (or further down the memory hierarchy) with no dependency on the pending stores in the buffer. Stalling the load would waste cycles for no correctness benefit in the single-threaded case — and the vast majority of loads and stores aren't involved in cross-thread communication. So the hardware lets the load execute, which is exactly what creates the observable store→load reordering.
+Now once you have that buffer, loads to different addresses have no reason to wait. The data the load wants is sitting right there in L1 (or further down the memory hierarchy) with no dependency on the pending stores in the buffer. Stalling the load would waste cycles for no correctness benefit in the single-threaded case — and the vast majority of loads and stores aren't involved in cross-thread communication. So the hardware lets the load execute, which is exactly what creates the observable `store→load` reordering.
 
-The store buffer is essentially the only source of reordering on x86. The TSO guarantee is then: stores drain from the buffer to the coherent cache in program order (giving you store→store ordering), loads are executed in program order with respect to each other (giving you load→load ordering), and a load can't move before an older load (giving you load→store ordering). The one thing it can't guarantee without a fence is that a store is visible to other cores before a subsequent load to a different address executes — because that would mean draining the store buffer synchronously, which is exactly what `MFENCE` / `LOCK XCHG` forces.
+The store buffer is essentially the only source of reordering on x86. The TSO guarantee is then: stores drain from the buffer to the coherent cache in program order (giving you `store→store` ordering), loads are executed in program order with respect to each other (giving you `load→load` ordering), and a load can't move before an older load (giving you `load→store` ordering). The one thing it can't guarantee without a fence is that a store is visible to other cores before a subsequent load to a different address executes — because that would mean draining the store buffer synchronously, which is exactly what `MFENCE` / `LOCK XCHG` forces.
 
 <table style="margin: 32px 0 20px auto; max-width: 75%; border-collapse: separate; border: none;">
 <tr><td style="background: #1e3f73; color: #ffffff; border: none; border-radius: 20px; padding: 12px 18px; line-height: 1.5;">
-<strong style="font-size: 1.4em;">Q:</strong>&nbsp; 1. "and a load can't move before an older load (giving you load→store ordering)" - did you mean "and a load can't move before an older load from the same address (giving you load→store ordering)" or any earlier load? 2. what if a program does a load from an address that's not currently in the L1 cache line but the SB has not been fully drained yet.. what is the behavior of the system in this case?
+<strong style="font-size: 1.4em;">Q:</strong>&nbsp; 1. "and a load can't move before an older load (giving you <code>load→store</code> ordering)" - did you mean "and a load can't move before an older load from the same address (giving you <code>load→store</code> ordering)" or any earlier load? 2. what if a program does a load from an address that's not currently in the L1 cache line but the SB has not been fully drained yet.. what is the behavior of the system in this case?
 </td></tr>
 </table>
 
@@ -241,16 +241,16 @@ The store buffer is essentially the only source of reordering on x86. The TSO gu
 
 My sentence was garbled in two ways. What I should have said:
 
-> "A store can't move before an older load (load→store ordering)."
+> "A store can't move before an older load (`load→store` ordering)."
 
-I accidentally wrote "a load can't move before an older load" and then mislabeled it as "load→store ordering." Those are two different guarantees. To state the full picture cleanly:
+I accidentally wrote "a load can't move before an older load" and then mislabeled it as "`load→store` ordering." Those are two different guarantees. To state the full picture cleanly:
 
-- **Load→load:** No load can reorder with any earlier load — regardless of address. All loads retire in program order.
-- **Store→store:** No store can become globally visible before any earlier store. The store buffer drains in FIFO order.
-- **Load→store:** A younger store cannot become visible before an older load completes. (A load effectively "pins" all later stores behind it.)
-- **Store→load:** A younger load can execute before an older store becomes globally visible. This is the one reordering TSO allows.
+- **`Load→load`:** No load can reorder with any earlier load — regardless of address. All loads retire in program order.
+- **`Store→store`:** No store can become globally visible before any earlier store. The store buffer drains in FIFO order.
+- **`Load→store`:** A younger store cannot become visible before an older load completes. (A load effectively "pins" all later stores behind it.)
+- **`Store→load`:** A younger load can execute before an older store becomes globally visible. This is the one reordering TSO allows.
 
-To directly answer your question: load→load ordering applies to any earlier load, not just the same address. If you have `load A; load B`, the core guarantees you see A's value from a point in time no later than B's, regardless of what addresses A and B target.
+To directly answer your question: `load→load` ordering applies to any earlier load, not just the same address. If you have `load A; load B`, the core guarantees you see A's value from a point in time no later than B's, regardless of what addresses A and B target.
 
 ### 2. L1 Miss With a Non-Empty Store Buffer
 
@@ -258,17 +258,17 @@ The load and the store buffer drain are largely independent operations. Here's w
 
 The core issues the load, checks the store buffer for a matching address (store-to-load forwarding), finds no match, checks L1, misses, and sends the request down the hierarchy — L2, L3, potentially main memory. Meanwhile the store buffer continues draining asynchronously at its own pace. Neither one blocks the other. The load doesn't wait for the store buffer to drain, and the store buffer doesn't wait for the load to complete.
 
-This is, in fact, exactly the store→load reordering in action. The load can complete (once the cache line comes back from L2/L3/memory) before older stores in the buffer have drained to L1. From another core's perspective, this thread "read before it wrote," even though program order was write-then-read.
+This is, in fact, exactly the `store→load` reordering in action. The load can complete (once the cache line comes back from L2/L3/memory) before older stores in the buffer have drained to L1. From another core's perspective, this thread "read before it wrote," even though program order was write-then-read.
 
-The subtlety is in maintaining load→load ordering. The core is allowed to speculatively issue multiple outstanding cache misses in parallel (this is critical for performance — you don't want cache misses serialized). But it tracks the order. If a younger load's result comes back first, the core holds onto it and doesn't retire it until the older load has also completed. More importantly, if between the time the younger load got its data and the time it's ready to retire, another core invalidated that cache line (because it wrote to it), the core detects this as a memory order violation and flushes the pipeline — effectively replaying from the older load. This is sometimes called a machine clear or memory order buffer (MOB) nuke, and it's a real performance event you can observe in hardware performance counters (`machine_clears.memory_ordering` on Intel).
+The subtlety is in maintaining `load→load` ordering. The core is allowed to speculatively issue multiple outstanding cache misses in parallel (this is critical for performance — you don't want cache misses serialized). But it tracks the order. If a younger load's result comes back first, the core holds onto it and doesn't retire it until the older load has also completed. More importantly, if between the time the younger load got its data and the time it's ready to retire, another core invalidated that cache line (because it wrote to it), the core detects this as a memory order violation and flushes the pipeline — effectively replaying from the older load. This is sometimes called a machine clear or memory order buffer (MOB) nuke, and it's a real performance event you can observe in hardware performance counters (`machine_clears.memory_ordering` on Intel).
 
-So the hardware is optimistic: it speculates that issuing loads out of order or in parallel will be fine, but it has a safety net that detects when the speculation was wrong (because the coherence protocol revealed an intervening write from another core). This gives you the illusion of strict load→load ordering while still getting most of the performance benefit of parallel cache misses.
+So the hardware is optimistic: it speculates that issuing loads out of order or in parallel will be fine, but it has a safety net that detects when the speculation was wrong (because the coherence protocol revealed an intervening write from another core). This gives you the illusion of strict `load→load` ordering while still getting most of the performance benefit of parallel cache misses.
 
-One more interesting case: the store buffer itself can also experience cache misses during drain. When an entry is ready to drain, the core needs exclusive ownership of the target cache line (MESI M state). If the line isn't in L1, the store buffer entry just sits there waiting while the coherence protocol fetches the line and invalidates other copies. The store is "stuck" in the buffer longer. During this time, younger loads to different addresses proceed happily — which again is just the store→load reordering manifesting due to the microarchitectural reality of cache miss latency.
+One more interesting case: the store buffer itself can also experience cache misses during drain. When an entry is ready to drain, the core needs exclusive ownership of the target cache line (MESI M state). If the line isn't in L1, the store buffer entry just sits there waiting while the coherence protocol fetches the line and invalidates other copies. The store is "stuck" in the buffer longer. During this time, younger loads to different addresses proceed happily — which again is just the `store→load` reordering manifesting due to the microarchitectural reality of cache miss latency.
 
 <table style="margin: 32px 0 20px auto; max-width: 75%; border-collapse: separate; border: none;">
 <tr><td style="background: #1e3f73; color: #ffffff; border: none; border-radius: 20px; padding: 12px 18px; line-height: 1.5;">
-<strong style="font-size: 1.4em;">Q:</strong>&nbsp; you said above "Load→store: A younger store cannot become visible before an older load completes. (A load effectively "pins" all later stores behind it.)" and my question is it meant to be "Load→store: A younger store cannot become visible before an older load <em>to the same address</em> completes. (A load effectively "pins" all later stores behind it.)" or "Load→store: A younger store cannot become visible before an older load to <em>any</em> address completes. (A load effectively "pins" all later stores behind it.)" ??
+<strong style="font-size: 1.4em;">Q:</strong>&nbsp; you said above "<code>Load→store</code>: A younger store cannot become visible before an older load completes. (A load effectively "pins" all later stores behind it.)" and my question is it meant to be "<code>Load→store</code>: A younger store cannot become visible before an older load <em>to the same address</em> completes. (A load effectively "pins" all later stores behind it.)" or "<code>Load→store</code>: A younger store cannot become visible before an older load to <em>any</em> address completes. (A load effectively "pins" all later stores behind it.)" ??
 </td></tr>
 </table>
 
@@ -281,13 +281,13 @@ store [B]
 
 the store to B cannot become globally visible until the load from A has completed, even though A and B are completely unrelated addresses. The load pins all younger stores behind it, not just stores to the same address.
 
-This is part of what makes TSO relatively strong. The only reordering x86 permits is the store→load case (a younger load can execute before an older store to a different address becomes visible). Every other combination — load→load, store→store, and load→store — is ordered across all addresses unconditionally.
+This is part of what makes TSO relatively strong. The only reordering x86 permits is the `store→load` case (a younger load can execute before an older store to a different address becomes visible). Every other combination — `load→load`, `store→store`, and `load→store` — is ordered across all addresses unconditionally.
 
-If load→store ordering were only enforced on matching addresses, the model would be substantially weaker, and you'd start seeing the kinds of exotic reorderings that show up on ARM and POWER, where almost any pair of operations to different addresses can be reordered absent explicit barriers.
+If `load→store` ordering were only enforced on matching addresses, the model would be substantially weaker, and you'd start seeing the kinds of exotic reorderings that show up on ARM and POWER, where almost any pair of operations to different addresses can be reordered absent explicit barriers.
 
 <table style="margin: 32px 0 20px auto; max-width: 75%; border-collapse: separate; border: none;">
 <tr><td style="background: #1e3f73; color: #ffffff; border: none; border-radius: 20px; padding: 12px 18px; line-height: 1.5;">
-<strong style="font-size: 1.4em;">Q:</strong>&nbsp; Can you give me a detailed explanation of where those guarantees about not allowing any reorderings of load->store, load->load on x86 stem from (not allowing store->store is clear and it stems from the sequential nature of the SB flushing; allowing store->load reordering is also clear as it stems from the asynchronous/parallel nature of the SB flushing relative to loads from different addresses) ?
+<strong style="font-size: 1.4em;">Q:</strong>&nbsp; Can you give me a detailed explanation of where those guarantees about not allowing any reorderings of <code>load->store</code>, <code>load->load</code> on x86 stem from (not allowing <code>store->store</code> is clear and it stems from the sequential nature of the SB flushing; allowing <code>store->load</code> reordering is also clear as it stems from the asynchronous/parallel nature of the SB flushing relative to loads from different addresses) ?
 <br>
 Be sure to give all the relevant details in a cohesive picture.
 </td></tr>
@@ -305,11 +305,11 @@ A store instruction on x86 goes through two distinct phases of "becoming real":
 
 **Phase 1 — Retirement:** The store retires from the ROB in program order and its address+data are placed into the store buffer. At this point the store is architecturally committed (it will happen, it can't be rolled back), but it is not yet globally visible to other cores. Only this core can see it, via store-to-load forwarding.
 
-**Phase 2 — Drain:** The store buffer drains the entry into L1 cache, which requires obtaining exclusive ownership of the cache line via the coherence protocol (MESI M state). At this point the store becomes globally visible. The store buffer drains in FIFO order, so stores become globally visible in program order. This gives you store→store ordering as you already understand.
+**Phase 2 — Drain:** The store buffer drains the entry into L1 cache, which requires obtaining exclusive ownership of the cache line via the coherence protocol (MESI M state). At this point the store becomes globally visible. The store buffer drains in FIFO order, so stores become globally visible in program order. This gives you `store→store` ordering as you already understand.
 
-The critical insight is that retirement (Phase 1) and drain (Phase 2) are decoupled. A store can sit in the store buffer for an arbitrarily long time between these two phases. This decoupling is exactly where store→load reordering comes from, as you already understand. But it's also what makes the other guarantees possible, as I'll explain below.
+The critical insight is that retirement (Phase 1) and drain (Phase 2) are decoupled. A store can sit in the store buffer for an arbitrarily long time between these two phases. This decoupling is exactly where `store→load` reordering comes from, as you already understand. But it's also what makes the other guarantees possible, as I'll explain below.
 
-### Load→Store Ordering: Why In-Order Retirement Is Sufficient
+### `Load→Store` Ordering: Why In-Order Retirement Is Sufficient
 
 Consider:
 
@@ -325,13 +325,13 @@ Here's the chain of dependencies that enforces ordering:
 3. The store enters the store buffer only at retirement.
 4. The store becomes globally visible only after it drains from the store buffer to L1 cache, which happens strictly after it enters the buffer.
 
-So the causal chain is: load completes → load retires → store retires → store enters store buffer → store drains to cache → store becomes globally visible. Each arrow is a strict ordering dependency. The store cannot become globally visible until after the load has completed. That's load→store ordering, and it falls out entirely from in-order retirement plus the fact that the store buffer is downstream of retirement.
+So the causal chain is: load completes → load retires → store retires → store enters store buffer → store drains to cache → store becomes globally visible. Each arrow is a strict ordering dependency. The store cannot become globally visible until after the load has completed. That's `load→store` ordering, and it falls out entirely from in-order retirement plus the fact that the store buffer is downstream of retirement.
 
 No special hardware mechanism is needed. The ROB already exists for precise exceptions. The store buffer already exists for decoupling. Together they give you this guarantee for free.
 
-### Load→Load Ordering: The Hard One
+### `Load→Load` Ordering: The Hard One
 
-This is where things get genuinely subtle, because unlike load→store, in-order retirement alone is not sufficient.
+This is where things get genuinely subtle, because unlike `load→store`, in-order retirement alone is not sufficient.
 
 Consider:
 
@@ -342,7 +342,7 @@ load [B]    ; instruction N+1, cache hit (completes in 4 cycles)
 
 The core is out-of-order, so it issues both loads in parallel. The load from B gets its data back from L1 almost immediately. The load from A is still waiting on L3. In terms of execution, load B has completed before load A. If we just let both retire once their data arrives, load B's value would reflect an earlier point in time than load A's value — because between when B read the cache and when A finally got its data, some other core might have modified B's cache line.
 
-In-order retirement guarantees that A retires before B, yes. But that only means we wait to commit B's result — it doesn't re-check whether B's result is still valid. If we simply hold onto B's speculatively-obtained value and rubber-stamp it at retirement time, we've broken load→load ordering. The value B read was correct at the time B executed, but by the time A completes and we retire both, some other core may have written to B in between.
+In-order retirement guarantees that A retires before B, yes. But that only means we wait to commit B's result — it doesn't re-check whether B's result is still valid. If we simply hold onto B's speculatively-obtained value and rubber-stamp it at retirement time, we've broken `load→load` ordering. The value B read was correct at the time B executed, but by the time A completes and we retire both, some other core may have written to B in between.
 
 This is where the Memory Order Buffer (MOB) and cache coherence snooping come in.
 
@@ -350,7 +350,7 @@ The MOB tracks all in-flight loads, including the address they read from and, cr
 
 At retirement time, when the core tries to retire load B, the MOB check reveals that B's cache line was invalidated after B read it. The core triggers a machine clear (sometimes called a memory order violation or MOB nuke) — it flushes the pipeline from load B onward and replays those instructions. On the second time through, load A has already completed, so load B re-executes with fresh data from the now-updated cache line, and the ordering is preserved.
 
-So the mechanism for load→load is optimistic speculation with rollback:
+So the mechanism for `load→load` is optimistic speculation with rollback:
 
 - **Speculate:** issue loads out of order for performance, let younger loads complete before older ones.
 - **Monitor:** use the coherence protocol's invalidation messages to detect when a speculatively-read cache line has been written by another core.
@@ -362,13 +362,13 @@ This is observable in hardware performance counters. On Intel, the counter `mach
 
 The three reordering guarantees on x86 stem from three different mechanisms:
 
-**Store→store** is enforced by the store buffer draining in FIFO order. Stores enter the buffer in program order (because retirement is in-order) and leave it in the same order. Simple and cheap.
+**`Store→store`** is enforced by the store buffer draining in FIFO order. Stores enter the buffer in program order (because retirement is in-order) and leave it in the same order. Simple and cheap.
 
-**Load→store** is enforced by in-order retirement. The load must retire (which requires completion) before the store can retire and enter the store buffer, which is the necessary precursor to global visibility. Falls out naturally from the existing ROB mechanism.
+**`Load→store`** is enforced by in-order retirement. The load must retire (which requires completion) before the store can retire and enter the store buffer, which is the necessary precursor to global visibility. Falls out naturally from the existing ROB mechanism.
 
-**Load→load** is enforced by speculative execution with coherence-based conflict detection and rollback. The hardware lets loads execute out of order for performance, but the MOB cross-checks against cache line invalidations from the coherence protocol, and flushes the pipeline if the speculation turns out to have violated program-order consistency. This is the most complex and expensive of the three to implement, and it's the one with direct performance consequences (machine clears) when cross-core contention is high.
+**`Load→load`** is enforced by speculative execution with coherence-based conflict detection and rollback. The hardware lets loads execute out of order for performance, but the MOB cross-checks against cache line invalidations from the coherence protocol, and flushes the pipeline if the speculation turns out to have violated program-order consistency. This is the most complex and expensive of the three to implement, and it's the one with direct performance consequences (machine clears) when cross-core contention is high.
 
-**Store→load reordering** is allowed because none of these mechanisms prevent it. The store sits in the store buffer after retirement (Phase 1), and the younger load executes against the coherent cache without waiting for the store to drain (Phase 2). In-order retirement doesn't help because the store has retired — it's committed in the store buffer — it just hasn't drained yet. The MOB doesn't help because the conflict detection only watches for external invalidations of lines that loads have read, not for "has my own store drained yet." There is simply no mechanism in the pipeline that ties the load's execution to the older store's drain, and adding one would mean stalling loads behind store buffer drains — exactly the performance cost that the store buffer was designed to avoid. That's why you need `MFENCE` or `LOCK` to explicitly force the drain.
+**`Store→load` reordering** is allowed because none of these mechanisms prevent it. The store sits in the store buffer after retirement (Phase 1), and the younger load executes against the coherent cache without waiting for the store to drain (Phase 2). In-order retirement doesn't help because the store has retired — it's committed in the store buffer — it just hasn't drained yet. The MOB doesn't help because the conflict detection only watches for external invalidations of lines that loads have read, not for "has my own store drained yet." There is simply no mechanism in the pipeline that ties the load's execution to the older store's drain, and adding one would mean stalling loads behind store buffer drains — exactly the performance cost that the store buffer was designed to avoid. That's why you need `MFENCE` or `LOCK` to explicitly force the drain.
 
 <table style="margin: 32px 0 20px auto; max-width: 75%; border-collapse: separate; border: none;">
 <tr><td style="background: #1e3f73; color: #ffffff; border: none; border-radius: 20px; padding: 12px 18px; line-height: 1.5;">
@@ -431,11 +431,11 @@ So a store has two phases of "becoming real":
 
 With all of this machinery defined, I can explain where each TSO guarantee comes from.
 
-#### Store→Store Ordering
+#### `Store→Store` Ordering
 
 Stores retire in program order (because retirement is in-order), so they enter the store buffer in program order. The store buffer drains in FIFO order — the oldest entry drains first. Therefore stores become globally visible in program order. Simple and direct.
 
-#### Load→Store Ordering
+#### `Load→Store` Ordering
 
 Consider:
 
@@ -451,9 +451,9 @@ The chain of ordering constraints:
 3. The store enters the store buffer at retirement — meaning after step 2 has happened.
 4. The store becomes globally visible only after it drains from the store buffer, which is strictly after step 3.
 
-So the causal chain is: load gets its data → load retires → store retires → store enters store buffer → store drains to cache → store becomes globally visible. Every arrow is a strict happens-after dependency. The store cannot become globally visible until after the load has completed. That's load→store ordering, and it falls out entirely from in-order retirement plus the store buffer being downstream of retirement. No special mechanism needed.
+So the causal chain is: load gets its data → load retires → store retires → store enters store buffer → store drains to cache → store becomes globally visible. Every arrow is a strict happens-after dependency. The store cannot become globally visible until after the load has completed. That's `load→store` ordering, and it falls out entirely from in-order retirement plus the store buffer being downstream of retirement. No special mechanism needed.
 
-#### Load→Load Ordering: The Hard One
+#### `Load→Load` Ordering: The Hard One
 
 Consider:
 
@@ -464,7 +464,7 @@ load [B]    ; instruction N+1, cache hit (4 cycles)
 
 The core is out-of-order, so it issues both loads in parallel. Load B gets its data from L1 almost immediately. Load A is still waiting on L3 or main memory. In terms of execution, load B completed first.
 
-Now, in-order retirement guarantees that load A retires before load B. But retirement just means "commit the value the load obtained." If we simply hold onto B's speculatively-obtained value and rubber-stamp it at retirement time, we have a problem: between the moment B executed and the moment B retires, some other core might have written to address B. The value B read was correct at execution time, but it's stale by retirement time. If we commit that stale value, then from the perspective of any external observer, this core "saw" B's old value after seeing A's newer value — a load→load reordering.
+Now, in-order retirement guarantees that load A retires before load B. But retirement just means "commit the value the load obtained." If we simply hold onto B's speculatively-obtained value and rubber-stamp it at retirement time, we have a problem: between the moment B executed and the moment B retires, some other core might have written to address B. The value B read was correct at execution time, but it's stale by retirement time. If we commit that stale value, then from the perspective of any external observer, this core "saw" B's old value after seeing A's newer value — a `load→load` reordering.
 
 In-order retirement alone doesn't prevent this. Retirement checks that an instruction completed, not that its result is still valid.
 
@@ -474,7 +474,7 @@ The MOB is a hardware structure that tracks all in-flight loads — their addres
 
 When the core reaches load B in the retirement queue, the MOB check reveals that B's cache line was invalidated after B read it. The core triggers a machine clear (also called a memory order violation or MOB nuke). It flushes the entire pipeline from load B onward — discarding all speculative results — and replays those instructions from scratch. On the second time through, load A has already completed and retired, so load B re-executes with fresh data from the now-current cache line. Ordering is preserved.
 
-So load→load ordering is enforced by optimistic speculation with rollback:
+So `load→load` ordering is enforced by optimistic speculation with rollback:
 
 - **Speculate:** issue loads out of order for performance.
 - **Monitor:** use the coherence protocol's invalidation messages to detect when a speculatively-read cache line was modified by another core in the window between execution and retirement.
@@ -482,7 +482,7 @@ So load→load ordering is enforced by optimistic speculation with rollback:
 
 This is observable in hardware performance counters. On Intel, `machine_clears.memory_ordering` counts these events. In most workloads it's rare, but under heavy cross-core contention on shared data it becomes a real performance cost.
 
-#### Store→Load Reordering: Why It's Allowed
+#### `Store→Load` Reordering: Why It's Allowed
 
 None of the above mechanisms prevent it. Consider:
 
@@ -501,21 +501,21 @@ To prevent this reordering you need an explicit fence: `MFENCE` or a `LOCK`-pref
 
 <table style="margin: 32px 0 20px auto; max-width: 75%; border-collapse: separate; border: none;">
 <tr><td style="background: #1e3f73; color: #ffffff; border: none; border-radius: 20px; padding: 12px 18px; line-height: 1.5;">
-<strong style="font-size: 1.4em;">Q:</strong>&nbsp; So, it looks like the way 'load->load' works (in terms of its guarantees) isn't just a side effect of other mechanisms working together, the decision/guarantee that prohibits reordering for load->load is a deliberate design choice seemingly meant to prevent what looks like the 'non-monotonic reads' kind of anomalies, right?
+<strong style="font-size: 1.4em;">Q:</strong>&nbsp; So, it looks like the way '<code>load->load</code>' works (in terms of its guarantees) isn't just a side effect of other mechanisms working together, the decision/guarantee that prohibits reordering for <code>load->load</code> is a deliberate design choice seemingly meant to prevent what looks like the 'non-monotonic reads' kind of anomalies, right?
 </td></tr>
 </table>
 
-Exactly right. The MOB snoop-checking and machine clear mechanism is dedicated hardware that Intel (and AMD) deliberately designed and spent transistor budget on specifically to enforce load→load ordering. It is not a free byproduct of anything else.
+Exactly right. The MOB snoop-checking and machine clear mechanism is dedicated hardware that Intel (and AMD) deliberately designed and spent transistor budget on specifically to enforce `load→load` ordering. It is not a free byproduct of anything else.
 
-Compare it to the other guarantees. Store→store ordering falls out of the store buffer being a FIFO queue — you'd have to go out of your way to not get it. Load→store ordering falls out of in-order retirement, which already exists for precise exceptions. Both are essentially free side effects of machinery that exists for other reasons.
+Compare it to the other guarantees. `Store→store` ordering falls out of the store buffer being a FIFO queue — you'd have to go out of your way to not get it. `Load→store` ordering falls out of in-order retirement, which already exists for precise exceptions. Both are essentially free side effects of machinery that exists for other reasons.
 
-Load→load is different. The natural behavior of an out-of-order core is to let younger loads complete before older ones whenever the data is available sooner. Without the MOB mechanism, this would be a performance win with zero cost in the single-threaded case (the results are still correct for that thread). Intel could have simply let it happen — which is exactly what ARM and POWER do. Those architectures allow load→load reordering, push the problem to software, and save the hardware complexity.
+`Load→load` is different. The natural behavior of an out-of-order core is to let younger loads complete before older ones whenever the data is available sooner. Without the MOB mechanism, this would be a performance win with zero cost in the single-threaded case (the results are still correct for that thread). Intel could have simply let it happen — which is exactly what ARM and POWER do. Those architectures allow `load→load` reordering, push the problem to software, and save the hardware complexity.
 
-Intel chose not to. They added a specific mechanism — snoop-driven conflict detection on speculative loads with pipeline flush on violation — that has real costs: transistor area for the MOB tracking logic, power consumption for continuous cross-checking against coherence traffic, and occasional pipeline flushes that burn tens of cycles when contention triggers a machine clear. All of that exists solely to enforce load→load ordering.
+Intel chose not to. They added a specific mechanism — snoop-driven conflict detection on speculative loads with pipeline flush on violation — that has real costs: transistor area for the MOB tracking logic, power consumption for continuous cross-checking against coherence traffic, and occasional pipeline flushes that burn tens of cycles when contention triggers a machine clear. All of that exists solely to enforce `load→load` ordering.
 
-And your characterization of why is spot on. What load→load reordering would break is monotonic reads — the guarantee that a core's view of global memory never moves backward in time. If load A completes at time T1 and sees some state of the world, and load B is younger in program order but executed earlier, B might reflect a state of the world from time T0 < T1. From the perspective of any reasoning about the program, the core "saw the future and then saw the past." Specifically, you could read a new value from one location (evidence that some event happened) and then read a stale value from another location (evidence that the event hasn't happened yet). That breaks the most basic intuition programmers have about how memory works.
+And your characterization of why is spot on. What `load→load` reordering would break is monotonic reads — the guarantee that a core's view of global memory never moves backward in time. If load A completes at time T1 and sees some state of the world, and load B is younger in program order but executed earlier, B might reflect a state of the world from time T0 < T1. From the perspective of any reasoning about the program, the core "saw the future and then saw the past." Specifically, you could read a new value from one location (evidence that some event happened) and then read a stale value from another location (evidence that the event hasn't happened yet). That breaks the most basic intuition programmers have about how memory works.
 
-This is the fundamental design philosophy behind TSO: the hardware should behave as if each core is executing loads and stores in program order against a single shared memory, with the sole exception that a store may be delayed (the store buffer). That one relaxation gives you the vast majority of the performance benefit of buffering writes, while keeping the programming model close enough to sequential consistency that most code written with simple intuitions about memory just works. Allowing load→load reordering would have been a second relaxation that breaks much deeper intuitions, and Intel decided the programming model cost wasn't worth the hardware savings.
+This is the fundamental design philosophy behind TSO: the hardware should behave as if each core is executing loads and stores in program order against a single shared memory, with the sole exception that a store may be delayed (the store buffer). That one relaxation gives you the vast majority of the performance benefit of buffering writes, while keeping the programming model close enough to sequential consistency that most code written with simple intuitions about memory just works. Allowing `load→load` reordering would have been a second relaxation that breaks much deeper intuitions, and Intel decided the programming model cost wasn't worth the hardware savings.
 
 It's worth noting that this is a genuinely debatable design tradeoff. ARM and RISC-V took the opposite position — allow all reorderings by default, give programmers explicit barriers, and keep the hardware simpler and more power-efficient. The result is that correct lock-free code on those architectures requires much more careful use of barriers, but the hardware is cheaper. x86's TSO is friendlier to programmers but commits to a hardware contract that is expensive to maintain as core counts grow and coherence traffic increases. Neither choice is obviously wrong — they're just different points in the design space.
 
@@ -541,6 +541,6 @@ Out-of-order execution is the primary mechanism for extracting that parallelism 
 
 Everything we discussed feeds into this. The store buffer exists because without it, every store would serialize the pipeline — the core would stall waiting for cache coherence before it could move on, destroying ILP. Speculative load execution exists because without it, a long-latency cache miss would block all younger loads from executing, even ones to completely unrelated addresses that are sitting in L1 — again destroying ILP. Even the MOB machine-clear mechanism is in service of ILP: it lets the core optimistically exploit ILP across loads (executing them in parallel) while preserving the TSO ordering contract through rollback when the speculation goes wrong.
 
-The fundamental tension in everything we've been discussing is exactly this: maximizing ILP wants the core to execute everything as soon as possible regardless of program order, while the memory ordering model constrains which reorderings are allowed to be visible. The entire microarchitectural story of TSO is about finding the sweet spot — execute aggressively out of order internally for ILP, but use the ROB, store buffer, and MOB to ensure that the externally visible behavior stays within TSO's rules. The one place where Intel decided to let the internal reordering leak through to become externally visible — store→load — is precisely the case where enforcing order would have cost the most ILP, because it would mean stalling loads behind slow store drains.
+The fundamental tension in everything we've been discussing is exactly this: maximizing ILP wants the core to execute everything as soon as possible regardless of program order, while the memory ordering model constrains which reorderings are allowed to be visible. The entire microarchitectural story of TSO is about finding the sweet spot — execute aggressively out of order internally for ILP, but use the ROB, store buffer, and MOB to ensure that the externally visible behavior stays within TSO's rules. The one place where Intel decided to let the internal reordering leak through to become externally visible — `store→load` — is precisely the case where enforcing order would have cost the most ILP, because it would mean stalling loads behind slow store drains.
 
 So the store buffer, the MOB, speculative loads, in-order retirement — all of it is infrastructure whose primary purpose is to let the core extract maximum ILP while giving other cores (and the programmer) a sane memory ordering model. ILP is the entire reason this complexity exists.
