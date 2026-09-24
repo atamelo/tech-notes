@@ -16,6 +16,14 @@ Raw input: user turns start with `Q:`, assistant turns with `A:`. ASCII diagrams
 
 - You should not allow (unless explicitly requested and/or required for some clear reason) the "long" dash ('—'). Prefer the "regular" dash ('-') instead. Applies to all text, including the assistant's; an unspaced `a—b` becomes `a - b`.
 
+### Inline code
+
+- Format a token as code if a reader could type it into code, a debugger or a man page and it would mean the same thing there: identifiers (functions, types, fields, variables), constants/flags/macros, instructions and registers, addresses and operands, literal values or expressions quoted from nearby code.
+- Leave it plain when it's used as a noun for a component, product or concept rather than as that code token (e.g. "the X thread", "the Y subsystem"). Ask: would it still read correctly with the code formatting removed? If the answer is "yes, it's just a name", leave it.
+- Don't format a term that appears in nearly every sentence of a file; the formatting stops carrying signal. Its literal code uses (`X=4`, `X-1`) still get formatted.
+- Relation notations between code concepts use one canonical form, in code: memory-ordering pairs are `load→store`. Convert other spellings (hyphen, `->`) to it. This counts as an explicit rule for editing the assistant's text (see "The words are untouchable").
+- Applies to answers, headings and questions; in a question bubble use `<code>…</code>`. Never touch code blocks, `<pre>`, links, or text that's already code.
+
 ### Questions → right-aligned chat bubble
 
 No headings, `---` separators or TOC for questions: they continue the conversation, they aren't sections.
@@ -50,7 +58,7 @@ No headings, `---` separators or TOC for questions: they continue the conversati
 ## Verifying a formatted transcript
 
 - Compare word sequences of the original (`git show HEAD:<file>`) and the result, ignoring whitespace, punctuation and added markup (fences, bubble HTML, `**`, backticks, `Q:`/`A:` prefixes). Content lines can also start with `A:` (e.g. `A: revision 4001`); strip the prefix only on an answer's first line.
-- Report every difference. The only expected ones are the typo fixes and the long-dash swaps.
+- Report every difference. The only expected ones are the typo fixes, the long-dash swaps and the canonical-notation conversions.
 - The number of fence lines must be even.
 - Preview the render locally (marked + github-markdown-css, served over http in the browser pane) before saying it looks right.
 
