@@ -1,4 +1,4 @@
-# Windows I/O Completion Ports (IOCP) — In-Depth Explanation
+# Windows I/O Completion Ports (IOCP) - In-Depth Explanation
 
 ---
 
@@ -6,7 +6,7 @@
 
 ### 1.1 The C10K Problem (and Beyond)
 
-The foundational problem is: **how does a single machine efficiently handle tens of thousands of concurrent I/O operations** — network sockets, file reads, pipe communications — without dedicating a thread to each one?
+The foundational problem is: **how does a single machine efficiently handle tens of thousands of concurrent I/O operations** - network sockets, file reads, pipe communications - without dedicating a thread to each one?
 
 I/O is slow. A disk read takes milliseconds; a network round-trip can take hundreds of milliseconds. During that time, whatever issued the I/O is _waiting_. The question is how you structure your program around that waiting.
 
@@ -55,7 +55,7 @@ The ideal solution has these properties:
 
 1. **Asynchronous I/O initiation.** "Start this read; don't block me; tell me when it's done."
 2. **Unified completion notification.** A single place where _all_ completions arrive, regardless of which socket/file/pipe they belong to.
-3. **Automatic, bounded thread pool.** A small, fixed set of worker threads that the OS itself keeps optimally busy — not too few (wasting CPU) and not too many (wasting memory and causing thrashing).
+3. **Automatic, bounded thread pool.** A small, fixed set of worker threads that the OS itself keeps optimally busy - not too few (wasting CPU) and not too many (wasting memory and causing thrashing).
 4. **LIFO thread wake-up.** When a completion arrives, wake the _most recently blocked_ thread, because its stack and cache lines are still hot.
 5. **Concurrency throttling.** If a worker thread happens to block (e.g., on a lock), the OS should transparently wake another worker so the CPU doesn't sit idle, but only up to a configured maximum to avoid oversubscription.
 
@@ -69,7 +69,7 @@ IOCP is the Windows kernel primitive that delivers all five of these.
 
 Before IOCP can deliver completions, you need a way to _start_ an I/O operation without blocking. On Windows, this is **Overlapped I/O**.
 
-Every async Windows I/O function — `ReadFile`, `WriteFile`, `WSARecv`, `WSASend`, `ConnectEx`, `AcceptEx`, `TransmitFile`, etc. — accepts a pointer to an `OVERLAPPED` structure:
+Every async Windows I/O function - `ReadFile`, `WriteFile`, `WSARecv`, `WSASend`, `ConnectEx`, `AcceptEx`, `TransmitFile`, etc. - accepts a pointer to an `OVERLAPPED` structure:
 
 ```c
 typedef struct _OVERLAPPED {
@@ -91,7 +91,7 @@ When you call `ReadFile(hFile, buf, len, NULL, &overlapped)`:
 - The kernel queues the I/O request to the appropriate driver stack.
 - The call returns **immediately** with `FALSE`, and `GetLastError()` returns `ERROR_IO_PENDING`.
 - The buffer you provided (`buf`) must remain valid and untouched until the I/O completes.
-- When the driver finishes, the kernel _posts a completion_ somewhere — and that "somewhere" is the IOCP.
+- When the driver finishes, the kernel _posts a completion_ somewhere - and that "somewhere" is the IOCP.
 
 **Key insight:** The `OVERLAPPED` structure is _your_ per-operation state token. You almost always embed it inside a larger structure:
 
@@ -109,7 +109,7 @@ When the completion is dequeued, you get back the `OVERLAPPED*`, and you use `CO
 
 ### 2.2 The I/O Completion Port Object
 
-The IOCP itself is a **kernel object** — an opaque handle created via `CreateIoCompletionPort`. Conceptually, it contains:
+The IOCP itself is a **kernel object** - an opaque handle created via `CreateIoCompletionPort`. Conceptually, it contains:
 
 ```
 ┌─────────────────────────────────────────────┐
@@ -153,7 +153,7 @@ CreateIoCompletionPort(
 );
 ```
 
-After this call, _any_ overlapped I/O operation on `hSocket` that completes will have its completion packet delivered to `hIOCP`. The `completionKey` is your per-handle context — typically a pointer to a `PER_SOCKET_CONTEXT` structure.
+After this call, _any_ overlapped I/O operation on `hSocket` that completes will have its completion packet delivered to `hIOCP`. The `completionKey` is your per-handle context - typically a pointer to a `PER_SOCKET_CONTEXT` structure.
 
 A single IOCP can (and should) have thousands of handles associated with it.
 
@@ -241,9 +241,9 @@ This is the most subtle and powerful aspect. Suppose `MaxConcurrency = 4` (quad-
 - 4 worker threads are processing completions (released).
 - 4 more are waiting in `GetQueuedCompletionStatus`.
 - Worker thread #2 acquires a database lock and blocks.
-- The kernel detects that released count dropped to 3 — below `MaxConcurrency`.
+- The kernel detects that released count dropped to 3 - below `MaxConcurrency`.
 - It wakes one of the waiting threads. Now 4 threads are active again.
-- Worker #2 gets the lock, resumes. Now 5 are active — temporarily above `MaxConcurrency`.
+- Worker #2 gets the lock, resumes. Now 5 are active - temporarily above `MaxConcurrency`.
 - The kernel allows this momentary overshoot but won't wake _more_ threads until the count drops below `MaxConcurrency` again.
 
 This means: **you get automatic, adaptive parallelism with no user-mode coordination**, bounded by real CPU count.
@@ -319,14 +319,14 @@ DWORD flags = 0;
 int rc = WSARecv(
     ctx->socket,
     &ioCtx->wsabuf, 1,
-    NULL,            // bytes received — ignored for overlapped
+    NULL,            // bytes received - ignored for overlapped
     &flags,
     &ioCtx->ov,
-    NULL             // no completion routine — using IOCP
+    NULL             // no completion routine - using IOCP
 );
 
 if (rc == SOCKET_ERROR && WSAGetLastError() != WSA_IO_PENDING) {
-    // real error — clean up
+    // real error - clean up
 }
 // Otherwise: I/O is pending. Completion will arrive on hIOCP.
 ```
@@ -633,7 +633,7 @@ Main Thread (receives shutdown signal):
 
 ## 6. How the .NET Runtime Uses IOCP Internally
 
-### 6.1 One IOCP Per Process — The Global I/O Completion Port
+### 6.1 One IOCP Per Process - The Global I/O Completion Port
 
 The .NET runtime (CoreCLR) creates **exactly one IOCP for the entire process**. This happens during `ThreadPool` initialization, deep in the native runtime startup path. In CoreCLR source (roughly `src/coreclr/vm/win32threadpool.cpp`), the initialization looks conceptually like:
 
@@ -647,9 +647,9 @@ HANDLE g_hCompletionPort = CreateIoCompletionPort(
 );
 ```
 
-Note that `MaxConcurrency = 0` — this is the Windows convention meaning "use the number of logical processors." The runtime trusts the OS's concurrency governor entirely.
+Note that `MaxConcurrency = 0` - this is the Windows convention meaning "use the number of logical processors." The runtime trusts the OS's concurrency governor entirely.
 
-This single IOCP serves as the convergence point for **all** asynchronous I/O across the entire .NET process: every `FileStream.ReadAsync`, every `Socket.ReceiveAsync`, every `NamedPipeClientStream.ReadAsync`, every `HttpClient` request — all of their OS-level completions funnel through this one kernel object. There is no per-socket IOCP, no per-module IOCP — just one.
+This single IOCP serves as the convergence point for **all** asynchronous I/O across the entire .NET process: every `FileStream.ReadAsync`, every `Socket.ReceiveAsync`, every `NamedPipeClientStream.ReadAsync`, every `HttpClient` request - all of their OS-level completions funnel through this one kernel object. There is no per-socket IOCP, no per-module IOCP - just one.
 
 ### 6.2 The Two ThreadPools: Worker vs. I/O
 
@@ -687,7 +687,7 @@ The **worker threads** handle `Task.Run`, `QueueUserWorkItem`, `async/await` con
 
 The **I/O completion threads** are fundamentally different. Each one sits in a tight loop calling `GetQueuedCompletionStatus` on the process-wide IOCP. When an OS-level I/O completion arrives, one of these threads wakes up, invokes the registered managed callback, and then loops back to `GQCS`. Their count is managed by a simpler demand-driven heuristic: the runtime adds I/O threads when completions are arriving faster than they're being processed, and lets them retire after an idle timeout.
 
-You can observe both pools via `ThreadPool.GetAvailableThreads(out int workerThreads, out int ioThreads)` — these are two separate numbers.
+You can observe both pools via `ThreadPool.GetAvailableThreads(out int workerThreads, out int ioThreads)` - these are two separate numbers.
 
 ### 6.3 The I/O Thread Loop (Native Side)
 
@@ -706,11 +706,11 @@ DWORD CompletionPortThreadStart(LPVOID lpArgs) {
             &bytesTransferred,
             &completionKey,
             &pOverlapped,
-            timeout  // not INFINITE — allows the thread to retire if idle
+            timeout  // not INFINITE - allows the thread to retire if idle
         );
 
         if (pOverlapped == NULL) {
-            // Timeout or IOCP closed — consider thread retirement
+            // Timeout or IOCP closed - consider thread retirement
             if (ShouldRetireThread()) break;
             continue;
         }
@@ -757,7 +757,7 @@ This is the same `CreateIoCompletionPort` "associate" call from the Win32 world.
 - `NamedPipeClientStream` / `NamedPipeServerStream` bind their pipe handles
 - `HttpClient` → `SocketsHttpHandler` → `Socket` → bound
 
-If you create a `FileStream` with `useAsync: false`, the handle is **not** bound to the IOCP, and "async" operations are faked by dispatching synchronous reads to the worker thread pool — a common performance pitfall.
+If you create a `FileStream` with `useAsync: false`, the handle is **not** bound to the IOCP, and "async" operations are faked by dispatching synchronous reads to the worker thread pool - a common performance pitfall.
 
 ### 6.5 The Managed Overlapped Machinery
 
@@ -798,9 +798,9 @@ The lifecycle is:
 
 4. **Free.** The callback (or code it triggers) calls `boundHandle.FreeNativeOverlapped(pOverlapped)`, which unpins the buffer and releases the native memory.
 
-**Critical detail:** The `NativeOverlapped` must be allocated via `ThreadPoolBoundHandle.AllocateNativeOverlapped` — not via `Overlapped.Pack` directly if you want IOCP dispatch. The bound handle ensures the CLR routes the completion correctly.
+**Critical detail:** The `NativeOverlapped` must be allocated via `ThreadPoolBoundHandle.AllocateNativeOverlapped` - not via `Overlapped.Pack` directly if you want IOCP dispatch. The bound handle ensures the CLR routes the completion correctly.
 
-### 6.6 Inside Socket.ReceiveAsync — End-to-End
+### 6.6 Inside Socket.ReceiveAsync - End-to-End
 
 Let's trace what happens when you call `await socket.ReceiveAsync(buffer)` on Windows:
 
@@ -882,7 +882,7 @@ resumes with `int bytesRead`.
 
 This is a key architectural decision. When a completion arrives, the callback runs **on the I/O completion thread**. But the code after `await` (the continuation) typically runs on a **worker thread**. Why?
 
-The I/O thread's job is to **dequeue completions as fast as possible**. If a continuation does anything non-trivial — accessing a database, computing something, even acquiring a contested lock — it blocks the I/O thread. A blocked I/O thread means the IOCP's concurrency governor must wake another I/O thread, and if all I/O threads are stuck running user continuations, completions pile up in the IOCP queue and throughput collapses.
+The I/O thread's job is to **dequeue completions as fast as possible**. If a continuation does anything non-trivial - accessing a database, computing something, even acquiring a contested lock - it blocks the I/O thread. A blocked I/O thread means the IOCP's concurrency governor must wake another I/O thread, and if all I/O threads are stuck running user continuations, completions pile up in the IOCP queue and throughput collapses.
 
 So the standard pattern in .NET's socket/file/pipe internals is:
 
@@ -929,7 +929,7 @@ ThreadPool.GetMaxThreads(out int maxWorkers, out int maxIO);
 
 **I/O pool sizing:** Much simpler. Starts with just 1 thread. When an I/O completion arrives and no I/O thread is available to process it promptly, the runtime creates a new one. I/O threads that sit idle for a period (around 10–20 seconds in practice) retire themselves. The pool grows and shrinks purely based on I/O completion pressure.
 
-Under heavy I/O load (e.g., a web server handling thousands of requests), you might see 4–8 I/O threads and 16–32 worker threads on an 8-core machine. The I/O thread count stays low because each I/O thread can process thousands of completions per second — the callback work is minimal.
+Under heavy I/O load (e.g., a web server handling thousands of requests), you might see 4–8 I/O threads and 16–32 worker threads on an 8-core machine. The I/O thread count stays low because each I/O thread can process thousands of completions per second - the callback work is minimal.
 
 ### 6.10 Interaction with async/await State Machine
 
@@ -998,13 +998,13 @@ MoveNext() case 0
                                                         Done.
 ```
 
-Note: Thread A and Thread B may or may not be the same physical thread. The worker pool doesn't guarantee affinity — and that's by design.
+Note: Thread A and Thread B may or may not be the same physical thread. The worker pool doesn't guarantee affinity - and that's by design.
 
 ### 6.11 The `FILE_FLAG_OVERLAPPED` Pitfall
 
-A common source of bugs: if you P/Invoke to `CreateFile` or work with raw handles and forget `FILE_FLAG_OVERLAPPED`, the handle operates in synchronous mode. When you then try to bind it to the IOCP via `ThreadPoolBoundHandle.BindHandle`, the I/O will **not** be truly async. The OS will complete it synchronously before returning, and the IOCP will receive a completion that was already done — turning your "async" code into blocking code that merely has extra overhead.
+A common source of bugs: if you P/Invoke to `CreateFile` or work with raw handles and forget `FILE_FLAG_OVERLAPPED`, the handle operates in synchronous mode. When you then try to bind it to the IOCP via `ThreadPoolBoundHandle.BindHandle`, the I/O will **not** be truly async. The OS will complete it synchronously before returning, and the IOCP will receive a completion that was already done - turning your "async" code into blocking code that merely has extra overhead.
 
-The .NET `FileStream(path, options)` with `options.IsAsync = true` (or the old `useAsync: true`) ensures `FILE_FLAG_OVERLAPPED` is passed. This is why `new FileStream(path, FileMode.Open)` (sync by default) followed by `ReadAsync` is slower than a properly opened async stream — it's faking async on the worker pool rather than using true overlapped I/O through the IOCP.
+The .NET `FileStream(path, options)` with `options.IsAsync = true` (or the old `useAsync: true`) ensures `FILE_FLAG_OVERLAPPED` is passed. This is why `new FileStream(path, FileMode.Open)` (sync by default) followed by `ReadAsync` is slower than a properly opened async stream - it's faking async on the worker pool rather than using true overlapped I/O through the IOCP.
 
 ### 6.12 Summary: The Full .NET IOCP Architecture
 
@@ -1063,7 +1063,7 @@ The .NET `FileStream(path, options)` with `options.IsAsync = true` (or the old `
 
 4. **NativeOverlapped is the bridge.** It extends the Win32 `OVERLAPPED` with managed back-pointers, enabling the CLR to route a raw kernel completion to a managed delegate.
 
-5. **I/O threads do minimal work.** The callback on the I/O thread should be cheap — set a result, schedule a continuation. Heavy work belongs on the worker pool.
+5. **I/O threads do minimal work.** The callback on the I/O thread should be cheap - set a result, schedule a continuation. Heavy work belongs on the worker pool.
 
 6. **async/await composes naturally.** The compiler's state machine suspends at `await`, freeing both the worker thread and eventually the I/O thread to serve other completions. True async I/O means zero threads are blocked waiting for data.
 
@@ -1081,7 +1081,7 @@ Linux's primary async I/O mechanism (epoll) is a **readiness-based** model:
 
 > "Tell me when this file descriptor is **ready** to be read without blocking. I'll do the actual read myself."
 
-This is not a cosmetic difference — it changes the entire internal architecture:
+This is not a cosmetic difference - it changes the entire internal architecture:
 
 ```
 Windows IOCP (Completion)              Linux epoll (Readiness)
@@ -1098,7 +1098,7 @@ Buffers pinned during I/O: YES         Buffers pinned during I/O: NO
 Kernel does the copy: YES              User-space does the read: YES
 ```
 
-Both achieve the same goal — no thread is blocked waiting for data — but they distribute responsibilities differently. .NET must abstract over this difference to present a unified `async/await` API.
+Both achieve the same goal - no thread is blocked waiting for data - but they distribute responsibilities differently. .NET must abstract over this difference to present a unified `async/await` API.
 
 ### 7.2 epoll in Brief
 
@@ -1120,16 +1120,16 @@ int n = epoll_wait(epfd, events, 64, timeout_ms);
 for (int i = 0; i < n; i++) {
     void *ctx = events[i].data.ptr;
     uint32_t flags = events[i].events;  // EPOLLIN, EPOLLOUT, EPOLLERR, ...
-    // fd associated with ctx is now ready — go read/write it
+    // fd associated with ctx is now ready - go read/write it
 }
 ```
 
 Key properties relevant to .NET:
 
-- **O(1) for wait** — `epoll_wait` returns only the _ready_ fds, not all registered ones.
-- **Edge-triggered mode (EPOLLET)** — notifies only on state _transitions_ (not-ready → ready), not on continuous readiness. More efficient but requires draining the fd completely on each notification.
-- **`data.ptr`** — each registration carries a user pointer, which .NET uses to store a back-reference to the managed socket context.
-- **Scales to millions of fds** — same O(1) characteristics as IOCP.
+- **O(1) for wait** - `epoll_wait` returns only the _ready_ fds, not all registered ones.
+- **Edge-triggered mode (EPOLLET)** - notifies only on state _transitions_ (not-ready → ready), not on continuous readiness. More efficient but requires draining the fd completely on each notification.
+- **`data.ptr`** - each registration carries a user pointer, which .NET uses to store a back-reference to the managed socket context.
+- **Scales to millions of fds** - same O(1) characteristics as IOCP.
 
 ### 7.3 The .NET Linux Architecture: SocketAsyncEngine
 
@@ -1186,7 +1186,7 @@ Key differences from the Windows architecture:
 | Dedicated threads             | I/O completion threads (GQCS loop)      | epoll threads (epoll_wait loop)                                              |
 | Where the actual read happens | Kernel (before completion)              | Worker thread (after readiness notification)                                 |
 | Buffer pinning during I/O     | Required (kernel writes to your buffer) | Not required (you read into buffer when ready)                               |
-| Separate I/O thread pool      | Yes (distinct from worker pool)         | No — epoll threads are not the CLR "I/O pool"; worker pool does the real I/O |
+| Separate I/O thread pool      | Yes (distinct from worker pool)         | No - epoll threads are not the CLR "I/O pool"; worker pool does the real I/O |
 
 ### 7.4 The Flow: `await socket.ReceiveAsync(buffer)` on Linux
 
@@ -1223,7 +1223,7 @@ await socket.ReceiveAsync(buf)
     │                                              ▼
     │                                          Queue callback to
     │                                          worker ThreadPool
-    │                                          (NOT read here — the
+    │                                          (NOT read here - the
     │                                          epoll thread must stay
     │                                          lean, just like the
     │                                          IOCP I/O thread)
@@ -1237,16 +1237,16 @@ await socket.ReceiveAsync(buf)
     │                                                           (your code after await)
 ```
 
-**The optimistic fast-path** is critical for performance. Many `ReceiveAsync` calls return data synchronously because the kernel's TCP receive buffer already has data. In this case, the call never touches epoll at all — it's just a non-blocking `read()` syscall that succeeds immediately, and the `ValueTask<int>` is returned already completed. The `await` doesn't even suspend. This is why `ValueTask` (instead of `Task`) matters: it avoids a heap allocation on the synchronous-completion path.
+**The optimistic fast-path** is critical for performance. Many `ReceiveAsync` calls return data synchronously because the kernel's TCP receive buffer already has data. In this case, the call never touches epoll at all - it's just a non-blocking `read()` syscall that succeeds immediately, and the `ValueTask<int>` is returned already completed. The `await` doesn't even suspend. This is why `ValueTask` (instead of `Task`) matters: it avoids a heap allocation on the synchronous-completion path.
 
 ### 7.5 Why the Actual read() Happens on the Worker Thread
 
-This is a subtle but important point. On Windows, by the time the IOCP completion fires, the data is _already in your buffer_ — the kernel did the copy as part of completing the overlapped I/O. On Linux with epoll, the completion only tells you the fd is _ready_. Someone still has to call `read()`.
+This is a subtle but important point. On Windows, by the time the IOCP completion fires, the data is _already in your buffer_ - the kernel did the copy as part of completing the overlapped I/O. On Linux with epoll, the completion only tells you the fd is _ready_. Someone still has to call `read()`.
 
 The epoll thread could do the `read()` itself, but .NET deliberately doesn't:
 
 1. **`read()` can block** in edge cases (spurious wake-ups, fd closed between notification and read).
-2. **It keeps the epoll thread doing only one thing** — calling `epoll_wait` and dispatching. This mirrors the Windows design where I/O completion threads do minimal work.
+2. **It keeps the epoll thread doing only one thing** - calling `epoll_wait` and dispatching. This mirrors the Windows design where I/O completion threads do minimal work.
 3. **It naturally load-balances** across worker threads.
 
 So the epoll thread's role is analogous to the IOCP I/O completion thread: receive notification, do the absolute minimum, hand off to the worker pool.
@@ -1255,7 +1255,7 @@ So the epoll thread's role is analogous to the IOCP I/O completion thread: recei
 
 Network I/O maps cleanly to epoll. **File I/O does not.**
 
-`epoll` does not work with regular files. Regular file descriptors are _always_ reported as ready by epoll — because from the kernel's perspective, a disk read will always "succeed" (it just might take a while for the data to arrive from disk). This means:
+`epoll` does not work with regular files. Regular file descriptors are _always_ reported as ready by epoll - because from the kernel's perspective, a disk read will always "succeed" (it just might take a while for the data to arrive from disk). This means:
 
 ```c
 // This is useless for disk files:
@@ -1280,9 +1280,9 @@ This is the same "fake async" behavior as opening a `FileStream` without `useAsy
 
 Linux's historical solutions for async file I/O:
 
-- **POSIX AIO (`aio_read`)** — poorly implemented on Linux, uses internal thread pool anyway.
-- **Linux native AIO (`io_submit`)** — only works with `O_DIRECT` (bypassing page cache), too restrictive.
-- **`io_uring`** — the modern solution (see 7.8).
+- **POSIX AIO (`aio_read`)** - poorly implemented on Linux, uses internal thread pool anyway.
+- **Linux native AIO (`io_submit`)** - only works with `O_DIRECT` (bypassing page cache), too restrictive.
+- **`io_uring`** - the modern solution (see 7.8).
 
 ### 7.7 Pipe / Unix Domain Socket I/O
 
@@ -1290,7 +1290,7 @@ Unlike regular files, pipes and Unix domain sockets **do** work with epoll. They
 
 ### 7.8 io_uring: Linux Gets a Completion Model
 
-`io_uring`, introduced in Linux 5.1 (2019), finally brings a **completion-based** model to Linux — conceptually similar to IOCP:
+`io_uring`, introduced in Linux 5.1 (2019), finally brings a **completion-based** model to Linux - conceptually similar to IOCP:
 
 ```
 ┌────────────────────────────────────────────────────┐
@@ -1303,7 +1303,7 @@ Unlike regular files, pipes and Unix domain sockets **do** work with epoll. They
 │  └────────────────────┘       └────────────────┘   │
 │                                                    │
 │  User-space and kernel share these ring buffers    │
-│  via mmap — submissions and completions can        │
+│  via mmap - submissions and completions can        │
 │  happen WITHOUT syscalls (io_uring_enter optional) │
 └────────────────────────────────────────────────────┘
 ```
@@ -1311,15 +1311,15 @@ Unlike regular files, pipes and Unix domain sockets **do** work with epoll. They
 Properties:
 
 - **Completion-based**, like IOCP: submit a read with a buffer, get a completion when the data is in the buffer.
-- **Works with regular files** — true async disk I/O without `O_DIRECT`.
-- **Shared memory ring buffers** — can submit and reap completions without syscalls.
-- **Batching** — submit many operations in one `io_uring_enter` call.
-- **Linked operations** — chain operations (read then write) in the kernel.
+- **Works with regular files** - true async disk I/O without `O_DIRECT`.
+- **Shared memory ring buffers** - can submit and reap completions without syscalls.
+- **Batching** - submit many operations in one `io_uring_enter` call.
+- **Linked operations** - chain operations (read then write) in the kernel.
 
 .NET has been progressively adding io_uring support:
 
 - **Experimental in .NET 5–7** via community libraries (e.g., `IoUring.Transport` for Kestrel).
-- **.NET 8+** — `System.Net.Sockets` can use io_uring internally when available, gated by runtime configuration. The `SocketAsyncEngine` can be backed by io_uring instead of epoll.
+- **.NET 8+** - `System.Net.Sockets` can use io_uring internally when available, gated by runtime configuration. The `SocketAsyncEngine` can be backed by io_uring instead of epoll.
 - When io_uring is used, the architecture converges with the Windows model: submit async reads with buffers, get completions, no need for the worker thread to call `read()`.
 
 ```
@@ -1363,7 +1363,7 @@ await socket.ReceiveAsync(buf)
 │ Buffer pinning   │ Required during I/O     │ Not needed (epoll)         │
 │                  │ (GC can't move buffer)  │ Required (io_uring)        │
 ├──────────────────┼─────────────────────────┼────────────────────────────┤
-│ Optimistic       │ Not typical — post      │ Yes — try read() first,    │
+│ Optimistic       │ Not typical - post      │ Yes - try read() first,    │
 │ synchronous path │ overlapped, wait for    │ only register with epoll   │
 │                  │ completion              │ if EAGAIN                  │
 ├──────────────────┼─────────────────────────┼────────────────────────────┤

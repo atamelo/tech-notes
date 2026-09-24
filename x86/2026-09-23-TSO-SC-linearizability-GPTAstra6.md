@@ -10,7 +10,7 @@ Do I get it right, that to get sequential consistency on x86 for memory operatio
 </td></tr>
 </table>
 
-Yes—at the machine-code level, putting `MFENCE` after every store, in every participating thread, is sufficient for sequential consistency, assuming ordinary loads/stores to write-back memory and accesses that are individually atomic.
+Yes - at the machine-code level, putting `MFENCE` after every store, in every participating thread, is sufficient for sequential consistency, assuming ordinary loads/stores to write-back memory and accesses that are individually atomic.
 
 The reasoning is straightforward:
 
@@ -29,7 +29,7 @@ A memory `XCHG`, which is implicitly locked, is another implementation of the SC
 
 After every store is sufficient, but often more than necessary. For example, a sequence of stores followed by loads needs only one `MFENCE` between the stores and the loads to close that ordering gap.
 
-Two scope qualifications: a fence does not make a tearing access atomic; and this is a hardware guarantee. In C/C++, use appropriate language-level atomics—adding hardware fences to racing ordinary variables does not by itself make the program valid.
+Two scope qualifications: a fence does not make a tearing access atomic; and this is a hardware guarantee. In C/C++, use appropriate language-level atomics - adding hardware fences to racing ordinary variables does not by itself make the program valid.
 
 <table style="margin: 32px 0 20px auto; max-width: 75%; border-collapse: separate; border: none;">
 <tr><td style="background: #1e3f73; color: #ffffff; border: none; border-radius: 20px; padding: 12px 18px; line-height: 1.5;">
@@ -41,7 +41,7 @@ Do I get it right?
 </td></tr>
 </table>
 
-Your scheme is sufficient, but the fences after loads are unnecessary. In the usual x86-TSO model, `store; MFENCE` for writes and ordinary loads for reads already implement linearizable read/write operations—provided the write operation includes the fence before returning.
+Your scheme is sufficient, but the fences after loads are unnecessary. In the usual x86-TSO model, `store; MFENCE` for writes and ordinary loads for reads already implement linearizable read/write operations - provided the write operation includes the fence before returning.
 
 The distinction is:
 
@@ -72,7 +72,7 @@ Thus, the implementation we discussed for SC already provides the stronger prope
 </td></tr>
 </table>
 
-No—SC does not automatically imply linearizability, even for one address on x86. The particular implementation we discussed provides both; the properties remain distinct.
+No - SC does not automatically imply linearizability, even for one address on x86. The particular implementation we discussed provides both; the properties remain distinct.
 
 A concrete counterexample is this alternative implementation of SC accesses:
 

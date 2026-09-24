@@ -287,7 +287,7 @@ So writes should generally carry an idempotency/request ID such as:
 
 allowing the new leader to recognize duplicate requests.
 
-So the practical answer is: either hide leadership behind a stable endpoint, or let clients discover the leader from any replica and cache that information. For high-performance distributed storage, the latter—bootstrap nodes + metadata/redirect + cached leader mapping + epoch/term—is probably the most characteristic architecture.
+So the practical answer is: either hide leadership behind a stable endpoint, or let clients discover the leader from any replica and cache that information. For high-performance distributed storage, the latter - bootstrap nodes + metadata/redirect + cached leader mapping + epoch/term - is probably the most characteristic architecture.
 
 <table style="margin: 32px 0 20px auto; max-width: 75%; border-collapse: separate; border: none;">
 <tr><td style="background: #1e3f73; color: #ffffff; border: none; border-radius: 20px; padding: 12px 18px; line-height: 1.5;">
@@ -345,7 +345,7 @@ dynamic knowledge:
 
 The important trick is that the bootstrap information changes much less frequently than leadership. You don't need a permanently correct leader address; you only need some reachable cluster member from which the current leader can be rediscovered.
 
-That's why systems often configure clients with multiple bootstrap nodes rather than a leader address. The bootstrap set is not authoritative and need not contain the leader—it just gives you an entry point into the cluster.
+That's why systems often configure clients with multiple bootstrap nodes rather than a leader address. The bootstrap set is not authoritative and need not contain the leader - it just gives you an entry point into the cluster.
 
 <table style="margin: 32px 0 20px auto; max-width: 75%; border-collapse: separate; border: none;">
 <tr><td style="background: #1e3f73; color: #ffffff; border: none; border-radius: 20px; padding: 12px 18px; line-height: 1.5;">
@@ -353,7 +353,7 @@ That's why systems often configure clients with multiple bootstrap nodes rather 
 </td></tr>
 </table>
 
-Right — in your terminology, the “stable endpoint” is itself a writing party, so it has exactly the same problem your original question asked about.
+Right - in your terminology, the “stable endpoint” is itself a writing party, so it has exactly the same problem your original question asked about.
 
 For that component, the common production mechanisms are basically:
 
@@ -422,7 +422,7 @@ A straightforward design is:
 }
 ```
 
-Your writing party—the stable endpoint/router—does this:
+Your writing party - the stable endpoint/router - does this:
 
 ```text
 1. Read /cluster/shard-17/leader
@@ -643,9 +643,9 @@ If the replica group already elects its leader, I'd generally let that protocol 
 </td></tr>
 </table>
 
-Yes—with an important distinction.
+Yes - with an important distinction.
 
-If you mean etcd's client-facing **Election primitive**, then yes: it is built on leases + ephemeral keys + etcd's globally ordered revisions. If you mean how the **etcd cluster itself** elects its internal Raft leader, that's different: that is ordinary Raft leader election using terms, heartbeats, votes, and quorum—not etcd leases.
+If you mean etcd's client-facing **Election primitive**, then yes: it is built on leases + ephemeral keys + etcd's globally ordered revisions. If you mean how the **etcd cluster itself** elects its internal Raft leader, that's different: that is ordinary Raft leader election using terms, heartbeats, votes, and quorum - not etcd leases.
 
 For the client-facing election, the mechanism is roughly this. Suppose A, B, and C all want to become application leader for `/my-service`.
 
@@ -1001,7 +1001,7 @@ That's the part that makes fencing tokens materially different from leases.
 </td></tr>
 </table>
 
-Yes — that’s the more precise objection, and you're right.
+Yes - that’s the more precise objection, and you're right.
 
 A fencing token does not retroactively invalidate an old leader's write. If the resource has only seen token 41, then an old leader holding 41 can still get a write accepted even after some external system has already elected leader 42.
 

@@ -14,7 +14,7 @@ Raw input: user turns start with `Q:`, assistant turns with `A:`. ASCII diagrams
 
 ### Character preferences
 
-- Try not to use (unless explicitly requested and/or required for some clear reason) the "long" dash ('—'). Prefer the "regular" dash ('-') instead.
+- You should not allow (unless explicitly requested and/or required for some clear reason) the "long" dash ('—'). Prefer the "regular" dash ('-') instead.
 
 ### Questions → right-aligned chat bubble
 
