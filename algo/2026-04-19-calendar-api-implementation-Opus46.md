@@ -43,7 +43,7 @@ Nodes are ordered by **start time** (the BST invariant). The `maxEnd` field is w
 
 Let me visualize the structure so the `maxEnd` augmentation is clear.
 
-![Augmented interval tree for calendar events: a balanced BST ordered by start time, where each node stores an event interval and a maxEnd value representing the maximum end time in its subtree](images/augmented_interval_tree.svg)
+![Augmented interval tree for calendar events: a balanced BST ordered by start time, where each node stores an event interval and a maxEnd value representing the maximum end time in its subtree](images/augmented_interval_tree_dark.svg)
 
 Notice how `maxEnd` propagates upward: the root's `maxEnd = 20` tells us "somewhere in this entire tree, an event ends as late as time 20." Each subtree carries this same guarantee locally.
 
@@ -100,7 +100,7 @@ The key pruning insight is on the left-subtree check: if `left.maxEnd <= querySt
 
 Let me illustrate this pruning with a concrete query.
 
-![Overlap query pruning example: querying for events overlapping [6, 11]; the left-left subtree is pruned because its maxEnd of 5 is less than query start of 6](images/overlap_query_pruning.svg)
+![Overlap query pruning example: querying for events overlapping [6, 11]; the left-left subtree is pruned because its maxEnd of 5 is less than query start of 6](images/overlap_query_pruning_dark.svg)
 
 For the query `[6, 11]`, two subtrees are pruned entirely: the `[1, 5]` subtree (its `maxEnd = 5 < 6`, so nothing there can overlap), and the `[14, 17]` subtree (its `start = 14 ≥ 11`, and by the BST property everything to its right starts even later, so nothing there can overlap either). Out of 7 nodes, we only visit 5, and we find 4 overlapping results.
 
