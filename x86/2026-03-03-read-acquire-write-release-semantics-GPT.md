@@ -1,9 +1,20 @@
-Q: Explain "read acquire" and "write release" semantics of memory load and store operations in the context of cpu memory models. Specifically:
-1. What problems they are meant to solve
-2. How exactly do they achieve/implement those semantics
-3. Code examples
+# Read-Acquire / Write-Release, x86-TSO, Fences and Lock-Free Techniques (ChatGPT)
 
-A: “**Read-acquire**” and “**write-release**” are *ordering* guarantees you can attach to atomic loads/stores so you can safely “publish” data between threads without paying for a full fence / total ordering.
+*A conversation with ChatGPT: what acquire/release ordering solves and how it's implemented, the message-passing and store-buffering litmus tests on x86 vs ARM, how `MFENCE` and locked instructions restore sequential consistency, `lock xchg` vs `mfence`, and how mutexes and lock-free structures are built from atomics.*
+
+<table style="margin: 32px 0 20px auto; max-width: 75%; border-collapse: separate; border: none;">
+<tr><td style="background: #1e3f73; color: #ffffff; border: none; border-radius: 20px; padding: 12px 18px; line-height: 1.5;">
+<strong style="font-size: 1.4em;">Q:</strong>&nbsp; Explain "read acquire" and "write release" semantics of memory load and store operations in the context of cpu memory models. Specifically:
+<br>
+1. What problems they are meant to solve
+<br>
+2. How exactly do they achieve/implement those semantics
+<br>
+3. Code examples
+</td></tr>
+</table>
+
+“**Read-acquire**” and “**write-release**” are *ordering* guarantees you can attach to atomic loads/stores so you can safely “publish” data between threads without paying for a full fence / total ordering.
 
 They’re easiest to understand as: **release = “push my earlier writes out before I signal”**, **acquire = “once I observe the signal, pull in everything that happened-before it.”**
 
@@ -208,11 +219,15 @@ static int Consumer()
 
   * The pattern works because `ready` is atomic and creates the ordering edge that “carries” visibility for surrounding non-atomic data.
 
-If you want, I can also walk through a specific litmus test (message-passing / store-buffering) and show exactly which outcomes are allowed under relaxed vs acquire/release vs seq_cst—and how that maps to x86 vs ARM.
+If you want, I can also walk through a specific litmus test (message-passing / store-buffering) and show exactly which outcomes are allowed under relaxed vs acquire/release vs seq_cst - and how that maps to x86 vs ARM.
 
-Q: Please do
+<table style="margin: 32px 0 20px auto; max-width: 75%; border-collapse: separate; border: none;">
+<tr><td style="background: #1e3f73; color: #ffffff; border: none; border-radius: 20px; padding: 12px 18px; line-height: 1.5;">
+<strong style="font-size: 1.4em;">Q:</strong>&nbsp; Please do
+</td></tr>
+</table>
 
-A: Cool — let’s do the two classic litmus tests and be very explicit about:
+Cool - let’s do the two classic litmus tests and be very explicit about:
 
 * what outcomes are possible,
 * what acquire/release changes (and what it **doesn’t**),
@@ -222,7 +237,7 @@ I’ll use C++ atomics (`std::atomic<int>`) because the memory orders map direct
 
 ---
 
-## Litmus 1: Message Passing (MP) — the thing acquire/release is *made* for
+## Litmus 1: Message Passing (MP) - the thing acquire/release is *made* for
 
 **Initial state:** `x = 0, y = 0`
 
@@ -286,7 +301,7 @@ Now:
 
 ---
 
-## Litmus 2: Store Buffering (SB) — the thing acquire/release does *not* fix
+## Litmus 2: Store Buffering (SB) - the thing acquire/release does *not* fix
 
 **Initial:** `x = 0, y = 0`
 
@@ -381,12 +396,17 @@ That fence specifically prevents “my store stays buffered while I perform a la
 
 If you want, I can add a third litmus (e.g., **IRIW** or **Load Buffering**) to show where *per-location coherence* ends and where you start needing stronger global ordering than acquire/release.
 
-Q: 
-1. Do I get it right that on x86 every store is "release" and every load is "acquire"?
+<table style="margin: 32px 0 20px auto; max-width: 75%; border-collapse: separate; border: none;">
+<tr><td style="background: #1e3f73; color: #ffffff; border: none; border-radius: 20px; padding: 12px 18px; line-height: 1.5;">
+<strong style="font-size: 1.4em;">Q:</strong>&nbsp; 1. Do I get it right that on x86 every store is "release" and every load is "acquire"?
+<br>
 2. Load/store reordering is allowed on x86?
+<br>
 3. Do I get it right that in the SB example you have above the threads are allowed to see the 'old' values since both the threads are not reading the memory location each of them updated itself (==has in its L1 cache store buffer), but rather are reading the value updated by the other thread which has not yet been propagated from the SB to L1 cache?
+</td></tr>
+</table>
 
-A: ### 1) “On x86 every store is release and every load is acquire” — yes, **for normal cached memory**, with some nuance
+### 1) “On x86 every store is release and every load is acquire” - yes, **for normal cached memory**, with some nuance
 
 At the **hardware memory-model** level (x86-TSO, for ordinary WB cacheable memory):
 
@@ -402,7 +422,7 @@ Nuance / footnotes:
 
 ---
 
-### 2) “Load/store reordering is allowed on x86?” — **only Store→Load (effectively)**
+### 2) “Load/store reordering is allowed on x86?” - **only Store→Load (effectively)**
 
 Under **TSO**, program order is preserved except that a later **load** may be performed/observed before an earlier **store** to a *different* location becomes globally visible.
 
@@ -422,7 +442,7 @@ This is exactly why SB (“store buffering”) is possible on x86.
 
 ---
 
-### 3) Your SB interpretation — basically right, here’s the precise picture
+### 3) Your SB interpretation - basically right, here’s the precise picture
 
 In the SB test:
 
@@ -449,10 +469,13 @@ So your summary is correct: the reads see “old” values because the *other co
 
 If you want, I can also write the same SB example in terms of explicit x86 behavior (“store buffer + invalidate on drain”), and show what instruction(s) on x86 would forbid `0/0` (spoiler: you need something that orders **Store→Load**, e.g. `MFENCE` or a `LOCK`ed op / `XCHG`).
 
+<table style="margin: 32px 0 20px auto; max-width: 75%; border-collapse: separate; border: none;">
+<tr><td style="background: #1e3f73; color: #ffffff; border: none; border-radius: 20px; padding: 12px 18px; line-height: 1.5;">
+<strong style="font-size: 1.4em;">Q:</strong>&nbsp; Please do what you have suggested at the end of your previous reply + explain how (if at all) that relates to the sequential consistency.
+</td></tr>
+</table>
 
-Q: Please do what you have suggested at the end of your previous reply + explain how (if at all) that relates to the sequential consistency. 
-
-A: Let’s pin this to the **store-buffering (SB)** test and describe what *x86 actually does*, what **MFENCE / LOCKed ops** change, and how that connects to **sequential consistency (SC)**.
+Let’s pin this to the **store-buffering (SB)** test and describe what *x86 actually does*, what **MFENCE / LOCKed ops** change, and how that connects to **sequential consistency (SC)**.
 
 ---
 
@@ -476,7 +499,7 @@ x86 cores have a **per-core store buffer**. A store typically:
 2. Later **drains** into the cache-coherent hierarchy (L1 gets the line in Modified/Exclusive state, other cores get invalidations, etc.).
 3. Only after draining does it become *globally visible* to other cores.
 
-Meanwhile, loads can execute while an earlier store to a **different** address is still buffered (this is the one key relaxation of x86-TSO: **Store→Load**). The SB outcome is a textbook example of “non-SC behaviour allowed by store buffering” under TSO. ([Computer Laboratory][1])
+Meanwhile, loads can execute while an earlier store to a **different** address is still buffered (this is the one key relaxation of x86-TSO: **Store→Load**). The SB outcome is a textbook example of “non-SC behaviour allowed by store buffering” under TSO. ([Computer Laboratory][a4-1])
 
 A concrete execution that yields `0/0`:
 
@@ -490,9 +513,9 @@ A concrete execution that yields `0/0`:
 * `y=1` goes into **SB1**.
 * `load x` happens before Core 0’s `x=1` has drained → reads `x==0`.
 
-Only later do SB0/SB1 drain, invalidating the other core’s cached copy and making `x=1`, `y=1` globally visible — but too late for the already-completed loads.
+Only later do SB0/SB1 drain, invalidating the other core’s cached copy and making `x=1`, `y=1` globally visible - but too late for the already-completed loads.
 
-So yes: your “hasn’t propagated out of the store buffer yet” mental model is basically right — with the refinement that “propagation” is via **draining into the coherent cache hierarchy** (not “into L1 and stop”, but “into L1 *and* coherency traffic happens so other cores can no longer read the old line”).
+So yes: your “hasn’t propagated out of the store buffer yet” mental model is basically right - with the refinement that “propagation” is via **draining into the coherent cache hierarchy** (not “into L1 and stop”, but “into L1 *and* coherency traffic happens so other cores can no longer read the old line”).
 
 ---
 
@@ -514,7 +537,7 @@ mfence
 mov  eax, dword ptr [x]      ; r2
 ```
 
-`MFENCE` is specified to order prior loads/stores before later loads/stores (i.e., it drains/blocks so you don’t get Store→Load reordering). ([Stack Overflow][2])
+`MFENCE` is specified to order prior loads/stores before later loads/stores (i.e., it drains/blocks so you don’t get Store→Load reordering). ([Stack Overflow][a4-2])
 
 With `mfence` in each thread, each load can’t run until *that thread’s* earlier store has become globally visible. That’s enough to make `0/0` impossible: at least one of the loads will occur after the other thread’s store has become visible.
 
@@ -522,8 +545,8 @@ With `mfence` in each thread, each load can’t run until *that thread’s* earl
 
 ### B) Use a LOCKed operation (e.g., `XCHG` with memory)
 
-On x86, `xchg reg, [mem]` is **implicitly locked** when the memory operand is used. ([felixcloutier.com][3])
-And x86’s ordering rules prevent loads/stores from being reordered across locked instructions (they act as a full barrier for ordinary memory ordering purposes). ([cfsamsonbooks.gitbook.io][4])
+On x86, `xchg reg, [mem]` is **implicitly locked** when the memory operand is used. ([felixcloutier.com][a4-3])
+And x86’s ordering rules prevent loads/stores from being reordered across locked instructions (they act as a full barrier for ordinary memory ordering purposes). ([cfsamsonbooks.gitbook.io][a4-4])
 
 So you can write:
 
@@ -555,7 +578,7 @@ In SB, getting `r1=0 && r2=0` would require:
 * T1’s `load x` to occur before T0’s `store x`
   but also each thread’s program order says its store comes before its load.
 
-That creates a cycle — no single interleaving can satisfy all of it — so **SC forbids `0/0`**. x86-TSO allows it specifically via store buffering / Store→Load relaxation. ([Computer Laboratory][1])
+That creates a cycle - no single interleaving can satisfy all of it - so **SC forbids `0/0`**. x86-TSO allows it specifically via store buffering / Store→Load relaxation. ([Computer Laboratory][a4-1])
 
 Adding `MFENCE` (or a locked op) removes that Store→Load relaxation *for that code path*, making the execution SC-like for this pattern.
 
@@ -563,7 +586,7 @@ Adding `MFENCE` (or a locked op) removes that Store→Load relaxation *for that 
 
 Language-level `memory_order_seq_cst` is essentially: *make atomics behave as if they participate in one global total order consistent with program order* (for seq_cst operations), which is strong enough to forbid SB’s `0/0`.
 
-On x86, compilers commonly implement **seq_cst stores** using a locked instruction such as `xchg` (exactly because plain `mov` would still allow Store→Load via store buffers). The Cambridge “C/C++ mappings” explicitly notes `xchg`’s implicit LOCK behavior in this context. ([Computer Laboratory][5])
+On x86, compilers commonly implement **seq_cst stores** using a locked instruction such as `xchg` (exactly because plain `mov` would still allow Store→Load via store buffers). The Cambridge “C/C++ mappings” explicitly notes `xchg`’s implicit LOCK behavior in this context. ([Computer Laboratory][a4-5])
 
 And that matches what you see in real codegen: `acquire`/`release` often compile to plain `mov` on x86, while `seq_cst` stores often become `xchg` (or a `mov` + fence, depending on compiler/version/target).
 
@@ -576,16 +599,19 @@ And that matches what you see in real codegen: `acquire`/`release` often compile
 
 If you want, I can also show the *exact* C++ litmus code (with `relaxed`, `acq/rel`, `seq_cst`) and the corresponding x86 assembly patterns (mov/mov vs xchg/mov vs mov+mfence+mov), plus which outcomes each permits.
 
-[1]: https://www.cl.cam.ac.uk/techreports/UCAM-CL-TR-745.pdf?utm_source=chatgpt.com "A better x86 memory model: x86-TSO (extended version)"
-[2]: https://stackoverflow.com/questions/40409297/does-lock-xchg-have-the-same-behavior-as-mfence?utm_source=chatgpt.com "Does lock xchg have the same behavior as mfence?"
-[3]: https://www.felixcloutier.com/x86/xchg?utm_source=chatgpt.com "XCHG — Exchange Register/Memory With Register"
-[4]: https://cfsamsonbooks.gitbook.io/explaining-atomics-in-rust?utm_source=chatgpt.com "Explaining Atomics in Rust"
-[5]: https://www.cl.cam.ac.uk/~pes20/cpp/cpp0xmappings.html?utm_source=chatgpt.com "C/C++11 mappings to processors"
+[a4-1]: https://www.cl.cam.ac.uk/techreports/UCAM-CL-TR-745.pdf?utm_source=chatgpt.com "A better x86 memory model: x86-TSO (extended version)"
+[a4-2]: https://stackoverflow.com/questions/40409297/does-lock-xchg-have-the-same-behavior-as-mfence?utm_source=chatgpt.com "Does lock xchg have the same behavior as mfence?"
+[a4-3]: https://www.felixcloutier.com/x86/xchg?utm_source=chatgpt.com "XCHG - Exchange Register/Memory With Register"
+[a4-4]: https://cfsamsonbooks.gitbook.io/explaining-atomics-in-rust?utm_source=chatgpt.com "Explaining Atomics in Rust"
+[a4-5]: https://www.cl.cam.ac.uk/~pes20/cpp/cpp0xmappings.html?utm_source=chatgpt.com "C/C++11 mappings to processors"
 
+<table style="margin: 32px 0 20px auto; max-width: 75%; border-collapse: separate; border: none;">
+<tr><td style="background: #1e3f73; color: #ffffff; border: none; border-radius: 20px; padding: 12px 18px; line-height: 1.5;">
+<strong style="font-size: 1.4em;">Q:</strong>&nbsp; Is there any difference between 'lock xchg' and 'mfence' on x86 both in terms of guarantees/semantics they provide and in terms of performance? Which is preferable when?
+</td></tr>
+</table>
 
-Q: Is there any difference between 'lock xchg' and 'mfence' on x86 both in terms of guarantees/semantics they provide and in terms of performance? Which is preferable when?
-
-Yes — there are differences, even though **both can act like a “full fence”** for normal cacheable (WB) memory.
+Yes - there are differences, even though **both can act like a “full fence”** for normal cacheable (WB) memory.
 
 ## 1) Guarantees / semantics
 
@@ -593,24 +619,24 @@ Yes — there are differences, even though **both can act like a “full fence�
 
 `MFENCE` is *pure ordering*:
 
-* It guarantees that **every load/store before the MFENCE becomes globally visible before any load/store after it becomes globally visible**. ([Félix Cloutier][1])
+* It guarantees that **every load/store before the MFENCE becomes globally visible before any load/store after it becomes globally visible**. ([Félix Cloutier][a5-1])
 * It **does not** perform an atomic update of any memory location.
-* It “does not serialize the instruction stream” (i.e., it’s about memory visibility/ordering, not “stop the world” retirement). ([Félix Cloutier][1])
+* It “does not serialize the instruction stream” (i.e., it’s about memory visibility/ordering, not “stop the world” retirement). ([Félix Cloutier][a5-1])
 
 ### `XCHG [mem], reg` (implicitly locked) / “`lock xchg`”
 
 `XCHG` with a **memory** operand is a *locked instruction*:
 
-* If a memory operand is referenced, the CPU’s **locking protocol is automatically implemented**, regardless of whether you write an explicit `LOCK` prefix. ([Félix Cloutier][2])
-* Locked instructions are **indivisible atomic RMW** operations (load(s) + store(s) as one uninterruptible unit). ([CMU School of Computer Science][3])
+* If a memory operand is referenced, the CPU’s **locking protocol is automatically implemented**, regardless of whether you write an explicit `LOCK` prefix. ([Félix Cloutier][a5-2])
+* Locked instructions are **indivisible atomic RMW** operations (load(s) + store(s) as one uninterruptible unit). ([CMU School of Computer Science][a5-3])
 * On WB memory, Intel’s own memory-ordering doc states:
 
-  * **Locked instructions have a total order** (all cores agree on their order). ([CMU School of Computer Science][3])
-  * **Loads and stores are not reordered with locked instructions** (full-barrier effect w.r.t. surrounding loads/stores). ([CMU School of Computer Science][3])
+  * **Locked instructions have a total order** (all cores agree on their order). ([CMU School of Computer Science][a5-3])
+  * **Loads and stores are not reordered with locked instructions** (full-barrier effect w.r.t. surrounding loads/stores). ([CMU School of Computer Science][a5-3])
 
-So as *a fence*, a locked `xchg` is at least as strong as `mfence` for the usual WB-memory model — but it also has a **side effect**: it’s an atomic read-modify-write on *some* cache line, and it participates in the global total order of locked ops.
+So as *a fence*, a locked `xchg` is at least as strong as `mfence` for the usual WB-memory model - but it also has a **side effect**: it’s an atomic read-modify-write on *some* cache line, and it participates in the global total order of locked ops.
 
-**Important practical nuance:** In higher-level language terms (C++/Rust), this “total order of locked ops” is one reason compilers like using `xchg` to implement a `seq_cst` store on x86 (another valid choice is `store + mfence`). ([Stack Overflow][4])
+**Important practical nuance:** In higher-level language terms (C++/Rust), this “total order of locked ops” is one reason compilers like using `xchg` to implement a `seq_cst` store on x86 (another valid choice is `store + mfence`). ([Stack Overflow][a5-4])
 
 ---
 
@@ -622,7 +648,7 @@ A locked op has to obtain **exclusive ownership** of the cache line and exclude 
 
 Agner Fog summarizes it bluntly: **LOCK-prefixed instructions typically cost >100 cycles**, depending on cache/RAM effects, and this *also applies to `XCHG` with a memory operand*. 
 
-Also, a locked op can have broader **system impact** (it creates coherence traffic and can hurt other cores), while a fence is more “local” in effect. ([Intel Community][5])
+Also, a locked op can have broader **system impact** (it creates coherence traffic and can hurt other cores), while a fence is more “local” in effect. ([Intel Community][a5-5])
 
 ### `MFENCE` cost profile
 
@@ -640,33 +666,34 @@ Agner’s tables show **tens of cycles** latency/throughput impact for `MFENCE` 
 ### Prefer a locked op (`xchg`, `lock cmpxchg`, `lock xadd`, …) when:
 
 * You **need atomic read-modify-write** semantics (locks, refcounts, CAS loops, etc.).
-* You need an operation that participates in the **global total order of locked ops** (relevant for implementing strong language atomics like `seq_cst` in some mappings). ([CMU School of Computer Science][3])
+* You need an operation that participates in the **global total order of locked ops** (relevant for implementing strong language atomics like `seq_cst` in some mappings). ([CMU School of Computer Science][a5-3])
 
 ### Prefer `MFENCE` when:
 
-* You **only** need ordering (especially the x86 “hole”: preventing **Store→Load** reordering / store-buffering effects), and you **don’t** want to touch a shared cache line just to get a fence. (`MFENCE` gives the “globally visible before/after” guarantee directly. ([Félix Cloutier][1]))
+* You **only** need ordering (especially the x86 “hole”: preventing **Store→Load** reordering / store-buffering effects), and you **don’t** want to touch a shared cache line just to get a fence. (`MFENCE` gives the “globally visible before/after” guarantee directly. ([Félix Cloutier][a5-1]))
 
 ### Real-world advice (most important)
 
 In C++/Rust/.NET, you almost never want to hand-pick `mfence` vs `xchg` in application code:
 
 * Use language atomics (`acquire/release/seq_cst`) and let the compiler pick the right mapping.
-* On x86, `acquire/release` is usually “free” (plain loads/stores), while `seq_cst` often forces something expensive (locked op or fence). ([Stack Overflow][4])
+* On x86, `acquire/release` is usually “free” (plain loads/stores), while `seq_cst` often forces something expensive (locked op or fence). ([Stack Overflow][a5-4])
 
 If you want, paste the exact pattern you’re considering (e.g., “I have SB and want to forbid 0/0” vs “I’m implementing a spinlock”), and I’ll tell you what I’d use and why for that case.
 
-[1]: https://www.felixcloutier.com/x86/mfence "MFENCE
-		— Memory Fence"
-[2]: https://www.felixcloutier.com/x86/xchg "XCHG
-		— Exchange Register/Memory With Register"
-[3]: https://www.cs.cmu.edu/~410-f10/doc/Intel_Reordering_318147.pdf "Microsoft Word - Intel-64_MO_v1.0_publish.doc"
-[4]: https://stackoverflow.com/questions/49107683/why-does-a-stdatomic-store-with-sequential-consistency-use-xchg?utm_source=chatgpt.com "Why does a std::atomic store with sequential consistency ..."
-[5]: https://community.intel.com/t5/Intel-Moderncode-for-Parallel/LOCK-vs-MFENCE/td-p/898179?utm_source=chatgpt.com "LOCK vs MFENCE"
+[a5-1]: https://www.felixcloutier.com/x86/mfence "MFENCE - Memory Fence"
+[a5-2]: https://www.felixcloutier.com/x86/xchg "XCHG - Exchange Register/Memory With Register"
+[a5-3]: https://www.cs.cmu.edu/~410-f10/doc/Intel_Reordering_318147.pdf "Microsoft Word - Intel-64_MO_v1.0_publish.doc"
+[a5-4]: https://stackoverflow.com/questions/49107683/why-does-a-stdatomic-store-with-sequential-consistency-use-xchg?utm_source=chatgpt.com "Why does a std::atomic store with sequential consistency ..."
+[a5-5]: https://community.intel.com/t5/Intel-Moderncode-for-Parallel/LOCK-vs-MFENCE/td-p/898179?utm_source=chatgpt.com "LOCK vs MFENCE"
 
+<table style="margin: 32px 0 20px auto; max-width: 75%; border-collapse: separate; border: none;">
+<tr><td style="background: #1e3f73; color: #ffffff; border: none; border-radius: 20px; padding: 12px 18px; line-height: 1.5;">
+<strong style="font-size: 1.4em;">Q:</strong>&nbsp; Do I get it right that the 'higher level' synchronization primitives like mutex are implemented with lock-free techniques using acquire/release/barriers where needed or CAS/RMW operations ?
+</td></tr>
+</table>
 
-Q: Do I get it right that the 'higher level' synchronization primitives like mutex are implemented with lock-free techniques using  acquire/release/barriers where needed or CAS/RMW operations ?
-
-A: Yes, that’s essentially right — with a few important precisions.
+Yes, that’s essentially right - with a few important precisions.
 
 * **Mutexes/condvars/semaphores** are *not* “lock-free” in the sense of guaranteeing global progress without blocking. They are **blocking primitives**.
 * But their **fast path** is usually built from **atomic RMW/CAS** plus **acquire/release** ordering, and only *then* they may fall back to the OS to block/wake threads.
@@ -731,14 +758,18 @@ void unlock() {
 
 That’s the core idea you described: **CAS/RMW + acquire/release (+ fences if required by the target ISA)**, with OS blocking on contention.
 
-So: **yes** — higher-level sync primitives are built on atomics/RMW plus the required ordering (acquire/release / fences). Just don’t call the primitives themselves “lock-free”; they’re typically *implemented* using lock-free techniques on the fast path, but they provide blocking semantics.
+So: **yes** - higher-level sync primitives are built on atomics/RMW plus the required ordering (acquire/release / fences). Just don’t call the primitives themselves “lock-free”; they’re typically *implemented* using lock-free techniques on the fast path, but they provide blocking semantics.
 
-Q: By 'lock-free' I meant the coding techniques that themselves do not (or simply cannot) use anything like mutex/semaphore/etc. But rather rely on a particular memory model for ordering, visibility and on RMW operations for atomicity.
+<table style="margin: 32px 0 20px auto; max-width: 75%; border-collapse: separate; border: none;">
+<tr><td style="background: #1e3f73; color: #ffffff; border: none; border-radius: 20px; padding: 12px 18px; line-height: 1.5;">
+<strong style="font-size: 1.4em;">Q:</strong>&nbsp; By 'lock-free' I meant the coding techniques that themselves do not (or simply cannot) use anything like mutex/semaphore/etc. But rather rely on a particular memory model for ordering, visibility and on RMW operations for atomicity.
+</td></tr>
+</table>
 
-A: Yep — in that sense you’re describing **“atomics + memory-ordering + RMW as the only primitives”** (i.e., *no* mutex/semaphore/condvar inside the algorithm). That’s exactly the toolbox used for:
+Yep - in that sense you’re describing **“atomics + memory-ordering + RMW as the only primitives”** (i.e., *no* mutex/semaphore/condvar inside the algorithm). That’s exactly the toolbox used for:
 
 1. **lock-free / wait-free algorithms** (queues, stacks, hash maps, refcounts, etc.), and
-2. the **core** of many “higher-level” primitives (mutexes, rwlocks, once-init, etc.) — even though those primitives may *also* call into the OS to block/wake.
+2. the **core** of many “higher-level” primitives (mutexes, rwlocks, once-init, etc.) - even though those primitives may *also* call into the OS to block/wake.
 
 The key distinction is **technique vs progress guarantee**:
 
@@ -829,6 +860,6 @@ Once you go beyond flags and counters, lock-free DS need safe reclamation:
 
 So your statement is right if you phrase it like this:
 
-> “Many synchronization primitives and lock-free data structures are built primarily from atomic loads/stores/RMW plus acquire/release (and fences when required), rather than using mutex/semaphore internally — but whether the *resulting primitive* is lock-free depends on its progress guarantee (mutexes aren’t).”
+> “Many synchronization primitives and lock-free data structures are built primarily from atomic loads/stores/RMW plus acquire/release (and fences when required), rather than using mutex/semaphore internally - but whether the *resulting primitive* is lock-free depends on its progress guarantee (mutexes aren’t).”
 
 If you tell me what you’re implementing (spinlock, once-init, queue, etc.), I can point at the exact acquire/release edges and the usual linearization points.
