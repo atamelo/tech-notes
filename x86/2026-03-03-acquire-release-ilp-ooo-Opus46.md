@@ -549,29 +549,33 @@ So the store buffer, the MOB, speculative loads, in-order retirement - all of it
 
 > Note: below is an addition from a separate session with Opus55
 
-Q: Check the following except for mistakes. I think in the litmus test definition it has a mistake. Specifically, to verify if the behavior follows the SC semantics, the two stored (to x and to y) must be executed from the same thread, not from two different thread as in the example. Thoughts? Do you see other inconsistencies?
-
+<table style="margin: 32px 0 20px auto; max-width: 75%; border-collapse: separate; border: none;">
+<tr><td style="background: #1e3f73; color: #ffffff; border: none; border-radius: 20px; padding: 12px 18px; line-height: 1.5;">
+<strong style="font-size: 1.4em;">Q:</strong>&nbsp; Check the following except for mistakes. I think in the litmus test definition it has a mistake. Specifically, to verify if the behavior follows the SC semantics, the two stores (to x and to y) must be executed from the same thread, not from two different thread as in the example. Thoughts? Do you see other inconsistencies?
+<br><br>
 "Acquire/Release and Causal Consistency.
-
+<br><br>
 Acquire/release establishes pairwise happens-before chains, and those chains are transitive: if A synchronizes-with B (via release/acquire), and B synchronizes-with C, then A happens-before C. Every thread that can causally trace back to a write will see it. But threads that have no causal connection to each other can disagree about the relative order of unrelated writes.
-
+<br><br>
 The formal term in the C++ memory model is that acquire/release operations are only required to be consistent with a per-location total order and the transitive closure of happens-before, not with any global total order. That maps closely onto causal consistency.
-
+<br><br>
 The textbook litmus test that distinguishes the two is IRIW (Independent Reads of Independent Writes):
-
+<pre style="background: rgba(255, 255, 255, 0.12); color: #ffffff; padding: 10px 14px; border-radius: 10px; margin: 10px 0;">
 // Initially x = 0, y = 0
-
 Thread 1: x.store(1, release)
 Thread 2: y.store(1, release)
 Thread 3: r1 = x.load(acquire) // sees 1
-r2 = y.load(acquire) // sees 0
+          r2 = y.load(acquire) // sees 0
 Thread 4: r3 = y.load(acquire) // sees 1
-r4 = x.load(acquire) // sees 0
+          r4 = x.load(acquire) // sees 0
+</pre>
 Under acquire/release, this outcome (r1=1, r2=0, r3=1, r4=0) is permitted. Thread 3 sees x updated before y; thread 4 sees y updated before x. There is no single total order they agree on. Under sequential consistency this is forbidden - all threads must observe one global ordering of all seq_cst operations."
+</td></tr>
+</table>
 
-A: I don't think that's a mistake. The two stores are _supposed_ to be on different threads, and that's the whole point of IRIW ("Independent Reads of **Independent Writes**").
+I don't think that's a mistake. The two stores are _supposed_ to be on different threads, and that's the whole point of IRIW ("Independent Reads of **Independent Writes**").
 
-## Why the writes must be on separate threads
+### Why the writes must be on separate threads
 
 If you move both stores into one thread, you get a different litmus test, essentially message passing (MP):
 
@@ -584,11 +588,11 @@ Thread 4: r3 = y.load(acquire)   // 1
           r4 = x.load(acquire)   // 0
 ```
 
-Now acquire/release alone already forbids the interesting outcome. Thread 4's acquire load of `y` reads from a release store that is sequenced after `x.store(1)`, so `x.store(1)` happens-before `r4`'s load, and `r4` must see 1. Thread 3's result (x=1, y=0) is just ordinary timing and tells you nothing. The test no longer distinguishes acquire/release from SC, because the causal chain through Thread 1's program order already imposes the order.
+Now acquire/release alone already forbids the interesting outcome. Thread 4's acquire load of `y` reads from a release store that is sequenced after `x.store(1)`, so `x.store(1)` happens-before `r4`'s load, and `r4` must see 1. Thread 3's result (`x=1, y=0`) is just ordinary timing and tells you nothing. The test no longer distinguishes acquire/release from SC, because the causal chain through Thread 1's program order already imposes the order.
 
-IRIW works as a separator precisely because the two writes have no causal relationship. Nothing orders them relative to each other, so acquire/release lets different readers observe them in different orders, while SC requires a single total order over all seq_cst operations that everyone agrees on. So the example as written is the correct, textbook form.
+IRIW works as a separator precisely because the two writes have no causal relationship. Nothing orders them relative to each other, so acquire/release lets different readers observe them in different orders, while SC requires a single total order over all `seq_cst` operations that everyone agrees on. So the example as written is the correct, textbook form.
 
-## Things that are actually imprecise
+### Things that are actually imprecise
 
 1. **The transitivity sentence is technically wrong as phrased.** "A synchronizes-with B, and B synchronizes-with C" doesn't really work: synchronizes-with goes from a release _store_ to an acquire _load_, so B would have to be both, which is only possible for an `acq_rel` read-modify-write. The usual chain is A synchronizes-with B, B is sequenced-before C, and C synchronizes-with D, which together give A happens-before D. Happens-before is transitive because it's built from both synchronizes-with and sequenced-before.
 
@@ -596,54 +600,62 @@ IRIW works as a separator precisely because the two writes have no causal relati
 
 3. **"The formal term in the C++ memory model is..."** The sentence names no term; it describes a property. The per-location total order has a name, _modification order_, and it would be clearer to use it. Coherence of each location's modification order is also what makes C++ release/acquire slightly stronger than some weaker definitions of causal consistency, so "maps closely onto" is a fair hedge rather than "is."
 
-4. **The SC sentence could be more explicit.** The code uses release/acquire, and the final sentence switches to seq*cst without saying what changes. It should state that the outcome is forbidden if \_all* the stores and loads are `memory_order_seq_cst`. In C++ it's not enough to upgrade only the stores or only the loads.
+4. **The SC sentence could be more explicit.** The code uses release/acquire, and the final sentence switches to `seq_cst` without saying what changes. It should state that the outcome is forbidden if _all_ the stores and loads are `memory_order_seq_cst`. In C++ it's not enough to upgrade only the stores or only the loads.
 
 5. **A practical caveat worth adding (not an error).** The C++ model permits this outcome, but you won't observe it on x86, and I believe not on ARMv8 either, since both are multi-copy atomic. It's historically observable on POWER. Readers who try to reproduce it on a typical machine may otherwise conclude the text is wrong.
 
-Q: But since those two stores (to two _different_ locations) are execited from two different threads, they by design will execute in random order. And no SC operation will make it execute in a specific order relative to each other simply because the SC is about providing a strict order of operations (i.e. as defined by the program order) from the _same_ thread.
+<table style="margin: 32px 0 20px auto; max-width: 75%; border-collapse: separate; border: none;">
+<tr><td style="background: #1e3f73; color: #ffffff; border: none; border-radius: 20px; padding: 12px 18px; line-height: 1.5;">
+<strong style="font-size: 1.4em;">Q:</strong>&nbsp; But since those two stores (to two <em>different</em> locations) are executed from two different threads, they by design will execute in random order. And no SC operation will make it execute in a specific order relative to each other simply because the SC is about providing a strict order of operations (i.e. as defined by the program order) from the <em>same</em> thread.
+</td></tr>
+</table>
 
-A: You're right that nothing forces the two stores into a particular order, and SC doesn't try to. Either store can go first. But that isn't what the IRIW test checks. It checks whether all threads **agree** on which one went first, whichever it was.
+You're right that nothing forces the two stores into a particular order, and SC doesn't try to. Either store can go first. But that isn't what the IRIW test checks. It checks whether all threads **agree** on which one went first, whichever it was.
 
-## SC has two parts, not one
+### SC has two parts, not one
 
 Lamport's definition of sequential consistency says the result of any execution is the same as if:
 
 1. the operations of all threads were executed in **some single sequential order** (one global interleaving), and
 2. the operations of each individual thread appear in that order in program order.
 
-Your description covers part 2 only. Part 1 is what matters here: there is one interleaving of _all_ operations from _all_ threads, and every load returns the value of the most recent store to that location in that one interleaving. C++ `seq_cst` mirrors this with a single total order S over all seq_cst operations that every thread observes consistently.
+Your description covers part 2 only. Part 1 is what matters here: there is one interleaving of _all_ operations from _all_ threads, and every load returns the value of the most recent store to that location in that one interleaving. C++ `seq_cst` mirrors this with a single total order S over all `seq_cst` operations that every thread observes consistently.
 
 So under SC, the stores can race and land in either order, but once that order exists, it's the same order for everyone.
 
-## Why the IRIW outcome contradicts SC
+### Why the IRIW outcome contradicts SC
 
-Assume some single total order exists that explains r1=1, r2=0, r3=1, r4=0, and write `<` for "earlier in that order."
+Assume some single total order exists that explains `r1=1, r2=0, r3=1, r4=0`, and write `<` for "earlier in that order."
 
 From Thread 3:
 
-- r1=1 means `x.store(1)` < T3's load of x
+- `r1=1` means `x.store(1)` < T3's load of x
 - program order gives T3's load of x < T3's load of y
-- r2=0 means T3's load of y < `y.store(1)`
+- `r2=0` means T3's load of y < `y.store(1)`
 
 So **x.store < y.store**.
 
 From Thread 4, by the same reasoning:
 
-- r3=1 means `y.store(1)` < T4's load of y
+- `r3=1` means `y.store(1)` < T4's load of y
 - program order gives T4's load of y < T4's load of x
-- r4=0 means T4's load of x < `x.store(1)`
+- `r4=0` means T4's load of x < `x.store(1)`
 
 So **y.store < x.store**.
 
 Both can't be true in one total order, so no SC execution produces this outcome. The race between the stores is real; what SC forbids is Thread 3 seeing the race go one way while Thread 4 sees it go the other.
 
-## What happens without SC
+### What happens without SC
 
 Under acquire/release there is no single global order, only per-location modification orders plus happens-before. Thread 3 and Thread 4 have no causal link to each other or to the ordering of the two independent stores, so nothing stops them from forming contradictory views. On hardware this corresponds to a write becoming visible to some cores before others (non-multi-copy-atomic machines like POWER). That disagreement is exactly what the IRIW test detects, which is why it needs the stores on separate threads.
 
-Q: How would that code example looked if we wanted the SC semantics?
+<table style="margin: 32px 0 20px auto; max-width: 75%; border-collapse: separate; border: none;">
+<tr><td style="background: #1e3f73; color: #ffffff; border: none; border-radius: 20px; padding: 12px 18px; line-height: 1.5;">
+<strong style="font-size: 1.4em;">Q:</strong>&nbsp; How would that code example looked if we wanted the SC semantics?
+</td></tr>
+</table>
 
-A: You make every operation `seq_cst`, both the stores and the loads:
+You make every operation `seq_cst`, both the stores and the loads:
 
 ```cpp
 // Initially x = 0, y = 0
@@ -661,9 +673,9 @@ Thread 4: r3 = y.load(std::memory_order_seq_cst);
 
 Since `seq_cst` is the default memory order, you can also write it without the arguments: `x.store(1)`, `r1 = x.load()`, or even `x = 1` and `r1 = x`.
 
-**All six operations have to be seq_cst.** If you upgrade only the stores and leave the loads as acquire, the loads don't take part in the single total order S, so the readers can still disagree. The same goes for upgrading only the loads: the forbidden outcome is guaranteed to be ruled out only when everything involved is seq_cst.
+**All six operations have to be seq_cst.** If you upgrade only the stores and leave the loads as acquire, the loads don't take part in the single total order S, so the readers can still disagree. The same goes for upgrading only the loads: the forbidden outcome is guaranteed to be ruled out only when everything involved is `seq_cst`.
 
-**There's another way to do it, using fences in the reader threads.** You can leave the stores and loads weaker and put a seq_cst fence between each reader's two loads:
+**There's another way to do it, using fences in the reader threads.** You can leave the stores and loads weaker and put a `seq_cst` fence between each reader's two loads:
 
 ```cpp
 Thread 1: x.store(1, std::memory_order_relaxed);
@@ -676,19 +688,23 @@ Thread 4: r3 = y.load(std::memory_order_relaxed);
           r4 = x.load(std::memory_order_relaxed);
 ```
 
-The two fences are ordered in S, and whichever comes first forces the other reader to see at least what the first reader saw. That rules out the contradictory views. This version relies on the fence rules as strengthened in C++20 (P0668). It also matches the hardware fix: on POWER, the reader threads need a full `sync` between the loads, and that is what a seq_cst fence compiles to.
+The two fences are ordered in S, and whichever comes first forces the other reader to see at least what the first reader saw. That rules out the contradictory views. This version relies on the fence rules as strengthened in C++20 (P0668). It also matches the hardware fix: on POWER, the reader threads need a full `sync` between the loads, and that is what a `seq_cst` fence compiles to.
 
-In practice, on x86 and ARMv8 the seq_cst version mostly costs you on the stores (`xchg` or `mov`+`mfence` on x86, `stlr` on ARMv8), while the loads stay cheap. On POWER, seq_cst loads carry a `sync`, which is where the price of preventing IRIW actually lands.
+In practice, on x86 and ARMv8 the `seq_cst` version mostly costs you on the stores (`xchg` or `mov`+`mfence` on x86, `stlr` on ARMv8), while the loads stay cheap. On POWER, `seq_cst` loads carry a `sync`, which is where the price of preventing IRIW actually lands.
 
-Q: Do I get it right that on x86 loads with seq_cst are just plain MOVs and that stores with seq_cts are either have mfence after it or uses lock xchg to do the store - and both provide a fence needed to observe the SC rules?
+<table style="margin: 32px 0 20px auto; max-width: 75%; border-collapse: separate; border: none;">
+<tr><td style="background: #1e3f73; color: #ffffff; border: none; border-radius: 20px; padding: 12px 18px; line-height: 1.5;">
+<strong style="font-size: 1.4em;">Q:</strong>&nbsp; Do I get it right that on x86 loads with <code>seq_cst</code> are just plain <code>MOV</code>s and that stores with <code>seq_cst</code> are either have <code>mfence</code> after it or uses <code>lock xchg</code> to do the store - and both provide a fence needed to observe the SC rules?
+</td></tr>
+</table>
 
-A: Yes, that's right, with one nuance about _which_ SC rule the fence is actually for.
+Yes, that's right, with one nuance about _which_ SC rule the fence is actually for.
 
-x86 follows TSO (total store order), which permits only one kind of reordering: a later load can complete before an earlier store to a different location becomes visible, because the store is still sitting in the core's store buffer. Every other ordering (load→load, load→store, store→store) is already preserved by the hardware. So a plain `MOV` load already has acquire semantics and a plain `MOV` store already has release semantics.
+x86 follows TSO (total store order), which permits only one kind of reordering: a later load can complete before an earlier store to a different location becomes visible, because the store is still sitting in the core's store buffer. Every other ordering (`load→load`, `load→store`, `store→store`) is already preserved by the hardware. So a plain `MOV` load already has acquire semantics and a plain `MOV` store already has release semantics.
 
-For seq_cst, the only gap left is that store→load reordering, so the standard mapping puts the cost on the store side. A seq_cst load is a plain `MOV`. A seq_cst store is either `MOV` followed by `MFENCE`, or `XCHG` with a memory operand. `XCHG` with memory is implicitly locked, so you don't need to write `lock xchg`; the `LOCK` prefix is redundant there. Any locked instruction acts as a full barrier, draining the store buffer before later loads can proceed. Clang emits `XCHG`, and GCC moved from `MOV`+`MFENCE` to `XCHG` at some point, as it's generally faster on modern cores. seq_cst RMW operations (`fetch_add`, `compare_exchange`) are just `LOCK`-prefixed instructions and need nothing extra.
+For `seq_cst`, the only gap left is that `store→load` reordering, so the standard mapping puts the cost on the store side. A `seq_cst` load is a plain `MOV`. A `seq_cst` store is either `MOV` followed by `MFENCE`, or `XCHG` with a memory operand. `XCHG` with memory is implicitly locked, so you don't need to write `lock xchg`; the `LOCK` prefix is redundant there. Any locked instruction acts as a full barrier, draining the store buffer before later loads can proceed. Clang emits `XCHG`, and GCC moved from `MOV`+`MFENCE` to `XCHG` at some point, as it's generally faster on modern cores. `seq_cst` RMW operations (`fetch_add`, `compare_exchange`) are just `LOCK`-prefixed instructions and need nothing extra.
 
-Mapping-wise, it would also be valid to put the `MFENCE` before seq_cst loads instead and keep stores as plain `MOV`. Compilers don't, since loads are usually more frequent than stores, but the choice has to be consistent across all compilers and libraries that might touch the same atomics, which is why it's effectively an ABI convention.
+Mapping-wise, it would also be valid to put the `MFENCE` before `seq_cst` loads instead and keep stores as plain `MOV`. Compilers don't, since loads are usually more frequent than stores, but the choice has to be consistent across all compilers and libraries that might touch the same atomics, which is why it's effectively an ABI convention.
 
 The fence is needed for the store-buffering (SB, or "Dekker") litmus test, not for IRIW:
 
@@ -700,4 +716,4 @@ Thread 2: y.store(1); r2 = x.load();
 
 Without a fence, both stores can sit in their store buffers while both loads read 0. The `XCHG` or `MFENCE` prevents that.
 
-IRIW, by contrast, is already forbidden on x86 even with plain `MOV`s everywhere, because x86 is multi-copy atomic: a store becomes visible to all other cores at the same moment, so two readers can never disagree about the order of independent stores. So in the IRIW example specifically, the seq_cst cost on x86 isn't buying anything; the hardware already gives you that guarantee. You still need seq_cst in the source code, though, because the C++ model allows the outcome, and the compiler is free to reorder the acquire loads' surrounding code in ways that the hardware alone wouldn't.
+IRIW, by contrast, is already forbidden on x86 even with plain `MOV`s everywhere, because x86 is multi-copy atomic: a store becomes visible to all other cores at the same moment, so two readers can never disagree about the order of independent stores. So in the IRIW example specifically, the `seq_cst` cost on x86 isn't buying anything; the hardware already gives you that guarantee. You still need `seq_cst` in the source code, though, because the C++ model allows the outcome, and the compiler is free to reorder the acquire loads' surrounding code in ways that the hardware alone wouldn't.
