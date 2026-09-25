@@ -30,7 +30,7 @@ The cleanest industry-oriented distinction is:
 
 **Fault tolerance is the ability of a system to continue providing correct service despite specified faults.**
 
-NIST defines it as a system property allowing proper operation even when components fail, or continued correct execution in the presence of hardware or software faults. :chatgpt-content-reference{index="0"}
+NIST defines it as a system property allowing proper operation even when components fail, or continued correct execution in the presence of hardware or software faults.
 
 The words **specified faults** are important. A system is never simply “fault tolerant” without qualification:
 
@@ -62,7 +62,7 @@ A database page becomes corrupt  ← error
 A query returns incorrect data   ← failure
 ```
 
-Fault tolerance attempts to prevent the fault or resulting error from becoming an externally visible failure - for example through replication, voting, error-correcting codes, retries, failover, or reconfiguration. This fault/error/failure distinction comes from the classic IEEE dependability taxonomy. :chatgpt-content-reference{index="1"}
+Fault tolerance attempts to prevent the fault or resulting error from becoming an externally visible failure - for example through replication, voting, error-correcting codes, retries, failover, or reconfiguration. This fault/error/failure distinction comes from the classic IEEE dependability taxonomy.
 
 #### Key characteristic
 
@@ -84,7 +84,7 @@ There may be a small latency spike, but ideally the client sees no failed operat
 
 **Availability is whether the service is operational, accessible, and usable when required.**
 
-ISO/IEC 25010 defines availability as the capability of a product to be operational and accessible when required for use. NIST similarly defines it as being accessible and usable on demand. :chatgpt-content-reference{index="2"}
+ISO/IEC 25010 defines availability as the capability of a product to be operational and accessible when required for use. NIST similarly defines it as being accessible and usable on demand.
 
 Availability is generally an **observable outcome**, often measured as:
 
@@ -146,7 +146,7 @@ A server returning `200 OK` with incorrect data should not normally count as pro
 
 **Resilience is the broader capability to prepare for, withstand, recover from, and adapt to adversity while preserving required or critical capabilities.**
 
-NIST gives several closely related definitions, including maintaining required capability in the face of adversity and continuing essential operations - possibly in a degraded state - then recovering within a mission-appropriate time. :chatgpt-content-reference{index="3"}
+NIST gives several closely related definitions, including maintaining required capability in the face of adversity and continuing essential operations - possibly in a degraded state - then recovering within a mission-appropriate time.
 
 A useful lifecycle model is:
 
@@ -181,7 +181,7 @@ Resilience may cover:
 - natural disasters;
 - unexpected or previously unmodeled conditions.
 
-NIST’s cyber-resiliency formulation explicitly includes anticipating, withstanding, recovering from, and adapting to adverse conditions, stresses, attacks, and compromises. :chatgpt-content-reference{index="4"}
+NIST’s cyber-resiliency formulation explicitly includes anticipating, withstanding, recovering from, and adapting to adverse conditions, stresses, attacks, and compromises.
 
 #### Degraded operation can still be resilient
 
@@ -297,7 +297,7 @@ An online store disables recommendations and analytics so checkout remains opera
 
 ## Why industry usage becomes confusing
 
-There is no single universally binding definition covering every industry and context. NIST itself warns that glossary definitions vary by source and context. :chatgpt-content-reference{index="5"}
+There is no single universally binding definition covering every industry and context. NIST itself warns that glossary definitions vary by source and context.
 
 Three common sources of confusion are:
 
@@ -358,7 +358,7 @@ fault → error → failure
 
 - **Fault:** the underlying cause of a problem.
 - **Error:** an incorrect internal system state.
-- **Failure:** externally observable deviation from the specified service. :chatgpt-content-reference{index="0"}
+- **Failure:** externally observable deviation from the specified service.
 
 Therefore:
 
@@ -420,7 +420,7 @@ Consequently, literature often calls behavioral assumptions **fault models** any
 - omission fault model;
 - Byzantine fault model.
 
-This usage is deeply established. Research papers routinely use phrases such as “Byzantine fault model” and “crash fault model,” even though those models primarily describe the behavior of faulty processes. :chatgpt-content-reference{index="1"}
+This usage is deeply established. Research papers routinely use phrases such as “Byzantine fault model” and “crash fault model,” even though those models primarily describe the behavior of faulty processes.
 
 So this is not simply incorrect terminology - it is a conventional abstraction:
 
