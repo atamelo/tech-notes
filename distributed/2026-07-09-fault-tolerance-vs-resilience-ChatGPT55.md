@@ -1,13 +1,24 @@
-Q: What is the difference between:
+# Fault Tolerance vs. Resiliency vs. Availability (ChatGPT 5.5)
+
+*A conversation with ChatGPT 5.5: fault tolerance as a mechanism, availability as an observed service property, resilience as the broader ability to handle adversity - how they relate, concrete examples, and "fault model" vs. "failure model".*
+
+<table style="margin: 32px 0 20px auto; max-width: 75%; border-collapse: separate; border: none;">
+<tr><td style="background: #1e3f73; color: #ffffff; border: none; border-radius: 20px; padding: 12px 18px; line-height: 1.5;">
+<strong style="font-size: 1.4em;">Q:</strong>&nbsp; What is the difference between:
+<br>
 1. Fault tolerance
+<br>
 2. Resiliency
+<br>
 3. Availability
-
+<br><br>
 ?
+<br><br>
+It feels like those terms are defined somewhat differently sometimes with quite a bit of overlap.. Also, those seem to be interconnected in many ways. Can you try and untangle it using most adopted industry-accepted definitions?
+</td></tr>
+</table>
 
-It feels like thos terms are defined somewhat differently sometimes with quite a bit of overlap.. Also, those seem to be interconnected in many ways. Can you try and untangle it using most adopted industry-accepted definitions?
-
-A: You are right: the terms overlap because they describe **different aspects of system behavior**, not three mutually exclusive categories.
+You are right: the terms overlap because they describe **different aspects of system behavior**, not three mutually exclusive categories.
 
 The cleanest industry-oriented distinction is:
 
@@ -15,7 +26,7 @@ The cleanest industry-oriented distinction is:
 > **Availability is an externally observed service property.**  
 > **Resilience is the broader ability to handle adversity over time.**
 
-## 1. Fault tolerance
+### 1. Fault tolerance
 
 **Fault tolerance is the ability of a system to continue providing correct service despite specified faults.**
 
@@ -31,7 +42,7 @@ The words **specified faults** are important. A system is never simply “fault 
 
 It may still fail under faults outside that model.
 
-### Fault → error → failure
+#### Fault → error → failure
 
 The standard dependability terminology distinguishes:
 
@@ -51,9 +62,9 @@ A database page becomes corrupt  ← error
 A query returns incorrect data   ← failure
 ```
 
-Fault tolerance attempts to prevent the fault or resulting error from becoming an externally visible failure—for example through replication, voting, error-correcting codes, retries, failover, or reconfiguration. This fault/error/failure distinction comes from the classic IEEE dependability taxonomy. :chatgpt-content-reference{index="1"}
+Fault tolerance attempts to prevent the fault or resulting error from becoming an externally visible failure - for example through replication, voting, error-correcting codes, retries, failover, or reconfiguration. This fault/error/failure distinction comes from the classic IEEE dependability taxonomy. :chatgpt-content-reference{index="1"}
 
-### Key characteristic
+#### Key characteristic
 
 Fault tolerance usually tries to **mask or contain faults while operation continues**.
 
@@ -69,7 +80,7 @@ There may be a small latency spike, but ideally the client sees no failed operat
 
 ---
 
-## 2. Availability
+### 2. Availability
 
 **Availability is whether the service is operational, accessible, and usable when required.**
 
@@ -77,24 +88,24 @@ ISO/IEC 25010 defines availability as the capability of a product to be operatio
 
 Availability is generally an **observable outcome**, often measured as:
 
-\[
+$$
 Availability =
 \frac{\text{time service satisfies its availability requirement}}
 {\text{total relevant time}}
-\]
+$$
 
 A simplified repairable-system approximation is:
 
-\[
+$$
 A \approx \frac{MTBF}{MTBF + MTTR}
-\]
+$$
 
 where:
 
 - **MTBF** = mean time between failures;
 - **MTTR** = mean time to restore or repair.
 
-### Availability does not specify how it is achieved
+#### Availability does not specify how it is achieved
 
 A system can achieve high availability through:
 
@@ -114,7 +125,7 @@ For example, a single process that crashes once a year and restarts in one secon
 
 Conversely, a system may tolerate one disk failure perfectly but still have poor availability because deployments, overloads, operator errors, or dependency failures frequently take it down.
 
-### Availability requires a service definition
+#### Availability requires a service definition
 
 “99.99% available” is incomplete unless you define what counts as available:
 
@@ -131,11 +142,11 @@ A server returning `200 OK` with incorrect data should not normally count as pro
 
 ---
 
-## 3. Resilience
+### 3. Resilience
 
 **Resilience is the broader capability to prepare for, withstand, recover from, and adapt to adversity while preserving required or critical capabilities.**
 
-NIST gives several closely related definitions, including maintaining required capability in the face of adversity and continuing essential operations—possibly in a degraded state—then recovering within a mission-appropriate time. :chatgpt-content-reference{index="3"}
+NIST gives several closely related definitions, including maintaining required capability in the face of adversity and continuing essential operations - possibly in a degraded state - then recovering within a mission-appropriate time. :chatgpt-content-reference{index="3"}
 
 A useful lifecycle model is:
 
@@ -153,7 +164,7 @@ Adapt / improve
 
 Resilience is broader than fault tolerance in several ways.
 
-### Broader range of adverse events
+#### Broader range of adverse events
 
 Fault tolerance normally focuses on faults covered by an engineering fault model.
 
@@ -172,7 +183,7 @@ Resilience may cover:
 
 NIST’s cyber-resiliency formulation explicitly includes anticipating, withstanding, recovering from, and adapting to adverse conditions, stresses, attacks, and compromises. :chatgpt-content-reference{index="4"}
 
-### Degraded operation can still be resilient
+#### Degraded operation can still be resilient
 
 A resilient system does not necessarily maintain full functionality.
 
@@ -191,7 +202,7 @@ Recovered mode:
 
 This can be a successful resilience response even though full availability temporarily decreased.
 
-### Recovery is part of resilience
+#### Recovery is part of resilience
 
 Fault tolerance emphasizes continuing despite faults. Resilience also includes what happens when continuation is impossible:
 
@@ -203,24 +214,24 @@ Fault tolerance emphasizes continuing despite faults. Resilience also includes w
 
 ---
 
-# The relationship
+## The relationship
 
 A useful conceptual picture is:
 
 ```text
                          RESILIENCE
         ┌───────────────────────────────────────┐
-        │ Prepare                              │
-        │                                      │
-        │   ┌──────── Fault tolerance ───────┐ │
-        │   │ Mask/contain specified faults  │ │
-        │   │ and continue correct service   │ │
-        │   └────────────────────────────────┘ │
-        │                                      │
-        │ Degrade safely                       │
-        │ Recover                              │
-        │ Rebuild                              │
-        │ Adapt                                │
+        │ Prepare                               │
+        │                                       │
+        │   ┌──────── Fault tolerance ───────┐  │
+        │   │ Mask/contain specified faults  │  │
+        │   │ and continue correct service   │  │
+        │   └────────────────────────────────┘  │
+        │                                       │
+        │ Degrade safely                        │
+        │ Recover                               │
+        │ Rebuild                               │
+        │ Adapt                                 │
         └───────────────────────────────────────┘
 
 Availability = externally observed result:
@@ -229,7 +240,7 @@ Availability = externally observed result:
 
 It is not quite correct to draw availability simply as a subset of resilience. Availability is better viewed as a **measurable service attribute or outcome**, while resilience and fault tolerance describe capabilities that influence it.
 
-## Comparison
+### Comparison
 
 | Concept | Main question | Scope | Failure may become visible? | Usually measured as |
 |---|---|---|---:|---|
@@ -237,9 +248,9 @@ It is not quite correct to draw availability simply as a subset of resilience. A
 | **Availability** | Is the required service usable when needed? | Externally observed service | Yes, reflected as downtime or failed requests | Percentage, SLI/SLO, downtime |
 | **Resilience** | Can the system preserve critical capability, limit damage, recover, and adapt under adversity? | End-to-end system, organization, and lifecycle | Possibly; degraded service or outage may occur | Impact, degradation, recovery time, data loss, adaptability |
 
-# Concrete examples
+## Concrete examples
 
-## Example 1: replicated database loses one replica
+### Example 1: replicated database loses one replica
 
 Suppose a database has three replicas and can serve requests using two.
 
@@ -255,7 +266,7 @@ Replica C: crashes
 
 Fault tolerance explains why the immediate crash was masked. Resilience describes the broader reaction and restoration process.
 
-## Example 2: backup restoration after a ransomware incident
+### Example 2: backup restoration after a ransomware incident
 
 A system is taken offline, rebuilt, and restored from immutable backups after four hours.
 
@@ -265,17 +276,17 @@ A system is taken offline, rebuilt, and restored from immutable backups after fo
 
 This is the clearest demonstration that resilience does not require uninterrupted availability.
 
-## Example 3: extremely reliable single server
+### Example 3: extremely reliable single server
 
 A single server runs for three years without failing.
 
-- **Available:** Historically, yes—possibly extremely available.
+- **Available:** Historically, yes - possibly extremely available.
 - **Fault tolerant:** No; one server failure can stop the service.
 - **Resilient:** Probably weak, unless there are effective restoration, backup, disaster-recovery, and operational capabilities.
 
 Good historical availability does not prove that the architecture can withstand future faults.
 
-## Example 4: graceful degradation during overload
+### Example 4: graceful degradation during overload
 
 An online store disables recommendations and analytics so checkout remains operational.
 
@@ -284,7 +295,7 @@ An online store disables recommendations and analytics so checkout remains opera
 - The system is demonstrating resilience through load shedding and graceful degradation.
 - This is not necessarily fault tolerance because overload is not always modeled as a component fault.
 
-# Why industry usage becomes confusing
+## Why industry usage becomes confusing
 
 There is no single universally binding definition covering every industry and context. NIST itself warns that glossary definitions vary by source and context. :chatgpt-content-reference{index="5"}
 
@@ -301,7 +312,7 @@ Three common sources of confusion are:
 
 Also, **resilience** is generally the more standard noun in engineering literature. **Resiliency** is commonly used, especially in business and cybersecurity, and normally means the same thing.
 
-# A precise working vocabulary
+## A precise working vocabulary
 
 For architecture discussions, I would use the terms this way:
 
@@ -309,7 +320,7 @@ For architecture discussions, I would use the terms this way:
 
 > **Availability:** The proportion of required occasions or time during which the defined service is operational and usable within its service-level requirements.
 
-> **Resilience:** The system’s broader ability to anticipate adversity, limit its impact, preserve critical capabilities—possibly in degraded form—recover within required limits, and adapt afterward.
+> **Resilience:** The system’s broader ability to anticipate adversity, limit its impact, preserve critical capabilities - possibly in degraded form - recover within required limits, and adapt afterward.
 
 And the central relationship is:
 
@@ -327,13 +338,17 @@ Resilience
 
 Thus, a compact but accurate summary is:
 
-> **Fault tolerance is about continuing through faults. Availability is about whether users can obtain the service. Resilience is about surviving the complete adverse event—including preparation, impact, degraded operation, recovery, and adaptation.**
+> **Fault tolerance is about continuing through faults. Availability is about whether users can obtain the service. Resilience is about surviving the complete adverse event - including preparation, impact, degraded operation, recovery, and adaptation.**
 
-Q: "fault model" or "failure model" - which one is the correct term?
+<table style="margin: 32px 0 20px auto; max-width: 75%; border-collapse: separate; border: none;">
+<tr><td style="background: #1e3f73; color: #ffffff; border: none; border-radius: 20px; padding: 12px 18px; line-height: 1.5;">
+<strong style="font-size: 1.4em;">Q:</strong>&nbsp; "fault model" or "failure model" - which one is the correct term?
+</td></tr>
+</table>
 
-A: **Both terms are used, but they are not perfectly synonymous under strict dependability terminology.**
+**Both terms are used, but they are not perfectly synonymous under strict dependability terminology.**
 
-## Precise distinction
+### Precise distinction
 
 The standard fault–error–failure chain is:
 
@@ -347,7 +362,7 @@ fault → error → failure
 
 Therefore:
 
-### Fault model
+#### Fault model
 
 A **fault model** specifies the faults the system assumes may occur, including their nature and bounds:
 
@@ -355,14 +370,14 @@ A **fault model** specifies the faults the system assumes may occur, including t
 - software bugs;
 - maliciously controlled nodes;
 - transient versus permanent faults;
-- at most \(f\) faulty replicas;
+- at most $f$ faulty replicas;
 - faults occurring independently versus correlated faults.
 
 It answers:
 
 > **What can go wrong internally, and under what assumptions?**
 
-### Failure model
+#### Failure model
 
 A **failure model** specifies how a component is allowed to behave incorrectly at its externally visible interface:
 
@@ -389,7 +404,7 @@ Resulting failure behavior:
 
 The fault belongs to the **fault model**; “stops permanently” belongs to a **crash-stop failure model**.
 
-## Why the distinction is blurry in distributed-systems literature
+### Why the distinction is blurry in distributed-systems literature
 
 Distributed algorithms generally cannot observe the underlying physical fault. They can only reason about its resulting behavior:
 
@@ -407,31 +422,31 @@ Consequently, literature often calls behavioral assumptions **fault models** any
 
 This usage is deeply established. Research papers routinely use phrases such as “Byzantine fault model” and “crash fault model,” even though those models primarily describe the behavior of faulty processes. :chatgpt-content-reference{index="1"}
 
-So this is not simply incorrect terminology—it is a conventional abstraction:
+So this is not simply incorrect terminology - it is a conventional abstraction:
 
 > A process is *faulty* if its behavior does not conform to the algorithm; the **fault model** describes the deviations that a faulty process may exhibit.
 
-## Best terminology in practice
+### Best terminology in practice
 
 When discussing a distributed algorithm, I would normally write:
 
-> **The algorithm assumes a crash-stop failure model and tolerates at most \(f\) faulty processes.**
+> **The algorithm assumes a crash-stop failure model and tolerates at most $f$ faulty processes.**
 
 That is maximally precise:
 
 - **failure model** describes the externally observable behavior;
 - **faulty processes** identifies which participants violate the specification;
-- \(f\) specifies the tolerated bound.
+- $f$ specifies the tolerated bound.
 
 But this is also completely conventional:
 
 > **The algorithm operates under a crash fault model.**
 
-For the statement from my previous answer—
+For the statement from my previous answer -
 
 > “A system is fault tolerant only relative to a specified fault model”
 
-—**fault model** was the appropriate broader term. It may include both:
+\- **fault model** was the appropriate broader term. It may include both:
 
 1. which faults may occur and how many; and
 2. what behavior those faults may cause.
